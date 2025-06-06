@@ -9,4 +9,12 @@
 tls TLS
 延迟(ms) 233 
 
-# github代理
+# github代理（开启节点下）
+
+代码上传  git push TkVoiceJourney  
+代码下载 https://github.com/Wu-ChengLiang/TkVoiceJourney
+
+## 若连接卡顿
+git remote -v  
+### 检查代理运行
+Get-Process | Where-Object {$_.ProcessName -match "clash|v2ray|trojan|shadowsocks|sing-box"} | Select-Object ProcessName,Id

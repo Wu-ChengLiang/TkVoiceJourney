@@ -1,0 +1,4 @@
+httpx
+ormsgpack
+pydantic
+fish-audio-sdk 
