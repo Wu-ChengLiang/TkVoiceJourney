@@ -1,0 +1,20 @@
+[
+  {
+    "name": "Base-Qwen3-8B",
+    "path": "../my_models",
+    "model_type": "qwen3",
+    "template": "qwen3",
+    "port": 8000,
+    "quant_method": "bnb",
+    "quant_bits": 4
+  },
+  {
+    "name": "FineTuned-Qwen3-8B",
+    "path": "./qwen3_output/v4-20250529-220431",
+    "model_type": "qwen3",
+    "template": "qwen3",
+    "port": 8001,
+    "quant_method": "bnb",
+    "quant_bits": 4
+  }
+]

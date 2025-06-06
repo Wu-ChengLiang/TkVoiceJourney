@@ -228,7 +228,7 @@ class DouyinLiveWebFetcher:
             try:
                 heartbeat = PushFrame(payload_type='hb').SerializeToString()
                 self.ws.send(heartbeat, websocket.ABNF.OPCODE_PING)
-                print("【√】发送心跳包")
+                # print("【√】发送心跳包")
             except Exception as e:
                 print("【X】心跳包检测错误: ", e)
                 break
@@ -364,7 +364,7 @@ class DouyinLiveWebFetcher:
     def _parseRankMsg(self, payload):
         message = RoomRankMessage().parse(payload)
         ranks_list = message.ranks_list
-        print(f"【直播间排行榜msg】{ranks_list}")
+        # print(f"【直播间排行榜msg】{ranks_list}")
     
     def _parseControlMsg(self, payload):
         '''直播间状态消息'''
@@ -377,4 +377,4 @@ class DouyinLiveWebFetcher:
     def _parseRoomStreamAdaptationMsg(self, payload):
         message = RoomStreamAdaptationMessage().parse(payload)
         adaptationType = message.adaptation_type
-        print(f'直播间adaptation: {adaptationType}')
+        # print(f'直播间adaptation: {adaptationType}')
