@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>抖音直播弹幕语音客服</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#FE2C55',
+                        secondary: '#3498db',
+                        dark: '#2c3e50',
+                        light: '#ecf0f1'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .scrollbar-hide {
+                -ms-overflow-style: none;
+                scrollbar-width: none;
+            }
+            .scrollbar-hide::-webkit-scrollbar {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col">
+    <!-- 顶部导航栏 -->
+    <header class="bg-white shadow-md sticky top-0 z-50">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-2">
+                <i class="fa fa-comment text-primary text-2xl"></i>
+                <h1 class="text-xl font-bold text-dark">抖音直播弹幕语音客服</h1>
+            </div>
+            <div class="flex items-center space-x-4">
+                <div class="flex items-center space-x-2">
+                    <span class="text-sm text-gray-500">直播间ID:</span>
+                    <input type="text" class="border border-gray-300 rounded px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
+                </div>
+                <button class="bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded transition-all duration-300 flex items-center space-x-1">
+                    <i class="fa fa-play"></i>
+                    <span>弹幕获取</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 主要内容区 -->
+    <main class="flex-grow container mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- 左侧 - 弹幕流和数据图表 -->
+        <div class="lg:col-span-2 space-y-6">
+            <!-- 左上侧 - 实时弹幕流 -->
+            <div class="bg-white rounded-xl shadow-md overflow-hidden">
+                <div class="p-4 border-b border-gray-100 flex justify-between items-center">
+                    <h2 class="font-semibold text-lg flex items-center">
+                        <i class="fa fa-comments text-primary mr-2"></i>实时弹幕流
+                    </h2>
+                    <span class="text-sm text-gray-500">0 条弹幕</span>
+                </div>
+                
+                <!-- 弹幕显示区域 -->
+                <div class="bg-gray-50 rounded-lg p-3 h-64 overflow-y-auto scrollbar-hide">
+                    <div class="mb-4 opacity-50 text-center text-sm text-gray-500">
+                        等待弹幕...
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 左下侧 - 数据图表 -->
+            <div class="bg-white rounded-xl shadow-md overflow-hidden">
+                <div class="p-4 border-b border-gray-100">
+                    <h2 class="font-semibold text-lg flex items-center">
+                        <i class="fa fa-bar-chart text-secondary mr-2"></i>弹幕数据分析
+                    </h2>
+                </div>
+                
+                <!-- 图表选项卡 -->
+                <div class="border-b border-gray-200">
+                    <ul class="flex flex-wrap -mb-px text-sm font-medium text-center">
+                        <li class="mr-2">
+                            <a href="#" class="inline-block p-4 border-b-2 border-primary text-primary rounded-t-lg">弹幕类型</a>
+                        </li>
+                        <li class="mr-2">
+                            <a href="#" class="inline-block p-4 border-b-2 border-transparent hover:text-gray-600 hover:border-gray-300 rounded-t-lg">互动统计</a>
+                        </li>
+                        <li class="mr-2">
+                            <a href="#" class="inline-block p-4 border-b-2 border-transparent hover:text-gray-600 hover:border-gray-300 rounded-t-lg">活跃用户</a>
+                        </li>
+                    </ul>
+                </div>
+                
+                <!-- 图表内容 -->
+                <div class="p-4">
+                    <div class="h-64">
+                        <!-- 图表占位 -->
+                        <div class="w-full h-full flex items-center justify-center text-gray-400">
+                            图表区域
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 右侧 - AI客服回复 -->
+        <div class="bg-white rounded-xl shadow-md overflow-hidden flex flex-col">
+            <div class="p-4 border-b border-gray-100">
+                <h2 class="font-semibold text-lg flex items-center">
+                    <i class="fa fa-robot text-secondary mr-2"></i>AI客服回复
+                </h2>
+            </div>
+            
+            <!-- 回复历史 -->
+            <div class="flex-grow p-4 overflow-y-auto scrollbar-hide">
+                <div class="mb-4 opacity-50 text-center text-sm text-gray-500">
+                    等待AI回复...
+                </div>
+            </div>
+            
+            <!-- 底部控制区 -->
+            <div class="p-4 border-t border-gray-100">
+                <div class="flex items-center space-x-3 mb-3">
+                    <div class="flex-1">
+                        <input type="text" placeholder="手动输入回复..." class="w-full border border-gray-300 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-secondary/50">
+                    </div>
+                    <button class="bg-secondary hover:bg-secondary/90 text-white p-2 rounded-full transition-all duration-300">
+                        <i class="fa fa-paper-plane"></i>
+                    </button>
+                </div>
+                
+                <div class="flex justify-between items-center text-sm text-gray-500">
+                    <div>
+                        <i class="fa fa-microphone mr-1"></i>
+                        <span>语音合成: <span class="text-green-500">已连接</span></span>
+                    </div>
+                    <div>
+                        <i class="fa fa-cog mr-1"></i>
+                        <a href="#" class="hover:text-secondary transition-colors duration-300">设置</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 页脚 -->
+    <footer class="bg-dark text-white py-4 mt-6">
+        <div class="container mx-auto px-4 text-center text-sm">
+            <p>抖音直播弹幕语音客服 &copy; 2025</p>
+        </div>
+    </footer>
+</body>
+</html>

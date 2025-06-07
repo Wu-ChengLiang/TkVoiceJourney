@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>抖音直播弹幕语音客服</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#FE2C55',
+                        secondary: '#3498db',
+                        dark: '#2c3e50',
+                        light: '#ecf0f1'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style>
+        .scrollbar-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+        .barrage-item {
+            transition: all 0.3s ease-in-out;
+        }
+        .barrage-item:hover {
+            background-color: #f8f9fa;
+        }
+        .ai-response {
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col">
+    <!-- 顶部导航栏 -->
+    <header class="bg-white shadow-md sticky top-0 z-50">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-2">
+                <i class="fa fa-comment text-primary text-2xl"></i>
+                <h1 class="text-xl font-bold text-dark">抖音直播弹幕语音客服</h1>
+            </div>
+            <div class="flex items-center space-x-4">
+                <div class="flex items-center space-x-2">
+                    <span class="text-sm text-gray-500">直播间ID:</span>
+                    <input 
+                        type="text" 
+                        id="liveIdInput"
+                        class="border border-gray-300 rounded px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                        placeholder="例如: 37002227641"
+                        value="37002227641"
+                    >
+                </div>
+                <button 
+                    id="toggleBtn"
+                    class="bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded transition-all duration-300 flex items-center space-x-1"
+                    onclick="toggleLiveMonitoring()"
+                >
+                    <i class="fa fa-play" id="toggleIcon"></i>
+                    <span id="toggleText">弹幕获取</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 主要内容区 -->
+    <main class="flex-grow container mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- 左侧 - 弹幕流和数据图表 -->
+        <div class="lg:col-span-2 space-y-6">
+            <!-- 左上侧 - 实时弹幕流 -->
+            <div class="bg-white rounded-xl shadow-md overflow-hidden">
+                <div class="p-4 border-b border-gray-100 flex justify-between items-center">
+                    <h2 class="font-semibold text-lg flex items-center">
+                        <i class="fa fa-comments text-primary mr-2"></i>实时弹幕流
+                    </h2>
+                    <span class="text-sm text-gray-500" id="barrageCount">0 条弹幕</span>
+                </div>
+                
+                <!-- 弹幕显示区域 -->
+                <div class="bg-gray-50 rounded-lg p-3 h-64 overflow-y-auto scrollbar-hide" id="barrageContainer">
+                    <div class="mb-4 opacity-50 text-center text-sm text-gray-500" id="waitingMsg">
+                        等待弹幕...
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 左下侧 - 数据图表 -->
+            <div class="bg-white rounded-xl shadow-md overflow-hidden">
+                <div class="p-4 border-b border-gray-100">
+                    <h2 class="font-semibold text-lg flex items-center">
+                        <i class="fa fa-bar-chart text-secondary mr-2"></i>弹幕数据分析
+                    </h2>
+                </div>
+                
+                <!-- 图表选项卡 -->
+                <div class="border-b border-gray-200">
+                    <ul class="flex flex-wrap -mb-px text-sm font-medium text-center">
+                        <li class="mr-2">
+                            <a href="#" class="inline-block p-4 border-b-2 border-primary text-primary rounded-t-lg">弹幕类型</a>
+                        </li>
+                        <li class="mr-2">
+                            <a href="#" class="inline-block p-4 border-b-2 border-transparent hover:text-gray-600 hover:border-gray-300 rounded-t-lg">互动统计</a>
+                        </li>
+                        <li class="mr-2">
+                            <a href="#" class="inline-block p-4 border-b-2 border-transparent hover:text-gray-600 hover:border-gray-300 rounded-t-lg">活跃用户</a>
+                        </li>
+                    </ul>
+                </div>
+                
+                <!-- 图表内容 -->
+                <div class="p-4">
+                    <div class="h-64" id="statsContent">
+                        <div class="w-full h-full flex items-center justify-center text-gray-400" id="statsPlaceholder">
+                            <div class="text-center">
+                                <i class="fa fa-pie-chart text-4xl mb-2"></i>
+                                <p>数据分析区域</p>
+                                <p class="text-sm">开始监控后显示统计数据</p>
+                            </div>
+                        </div>
+                        <div class="w-full h-full hidden" id="analyticsData">
+                            <div class="grid grid-cols-2 gap-4 h-full">
+                                <div>
+                                    <h4 class="font-medium mb-3 text-gray-700 text-sm">实时统计</h4>
+                                    <div class="space-y-2">
+                                        <div class="bg-blue-50 p-2 rounded text-xs">
+                                            <div class="text-gray-600">5分钟内消息</div>
+                                            <div class="text-lg font-bold text-blue-600" id="messages5min">0</div>
+                                        </div>
+                                        <div class="bg-green-50 p-2 rounded text-xs">
+                                            <div class="text-gray-600">1小时内消息</div>
+                                            <div class="text-lg font-bold text-green-600" id="messages1hour">0</div>
+                                        </div>
+                                        <div class="bg-purple-50 p-2 rounded text-xs">
+                                            <div class="text-gray-600">活跃用户</div>
+                                            <div class="text-lg font-bold text-purple-600" id="activeUsers">0</div>
+                                        </div>
+                                        <div class="bg-orange-50 p-2 rounded text-xs">
+                                            <div class="text-gray-600">AI回复</div>
+                                            <div class="text-lg font-bold text-orange-600" id="aiReplies">0</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <h4 class="font-medium mb-3 text-gray-700 text-sm">消息类型分布</h4>
+                                    <div id="messageTypesChart" class="space-y-1">
+                                        <!-- 动态生成消息类型图表 -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 右侧 - AI客服回复 -->
+        <div class="bg-white rounded-xl shadow-md overflow-hidden flex flex-col">
+            <div class="p-4 border-b border-gray-100">
+                <h2 class="font-semibold text-lg flex items-center">
+                    <i class="fa fa-robot text-secondary mr-2"></i>AI客服回复
+                </h2>
+            </div>
+            
+            <!-- 回复历史 -->
+            <div class="flex-grow p-4 overflow-y-auto scrollbar-hide" id="aiResponseContainer">
+                <div class="mb-4 opacity-50 text-center text-sm text-gray-500" id="aiWaitingMsg">
+                    等待AI回复...
+                </div>
+            </div>
+            
+            <!-- 底部控制区 -->
+            <div class="p-4 border-t border-gray-100">
+                <div class="flex items-center space-x-3 mb-3">
+                    <div class="flex-1">
+                        <input 
+                            type="text" 
+                            id="manualReplyInput"
+                            placeholder="手动输入回复..." 
+                            class="w-full border border-gray-300 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-secondary/50"
+                            onkeypress="handleManualReplyKeyPress(event)"
+                        >
+                    </div>
+                    <button 
+                        class="bg-secondary hover:bg-secondary/90 text-white p-2 rounded-full transition-all duration-300"
+                        onclick="sendManualReply()"
+                    >
+                        <i class="fa fa-paper-plane"></i>
+                    </button>
+                </div>
+                
+                <div class="flex justify-between items-center text-sm text-gray-500">
+                    <div>
+                        <i class="fa fa-microphone mr-1"></i>
+                        <span>语音合成: <span class="text-green-500" id="ttsStatus">已连接</span></span>
+                    </div>
+                    <div>
+                        <i class="fa fa-cog mr-1"></i>
+                        <a href="#" class="hover:text-secondary transition-colors duration-300">设置</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 页脚 -->
+    <footer class="bg-dark text-white py-4 mt-6">
+        <div class="container mx-auto px-4 text-center text-sm">
+            <p>抖音直播弹幕语音客服 &copy; 2025</p>
+        </div>
+    </footer>
+
+    <!-- 音频播放器 -->
+    <audio id="audioPlayer" preload="auto" style="display: none;"></audio>
+
+    <!-- JavaScript -->
+    <script>
+        // 全局变量
+        let ws = null;
+        let isMonitoring = false;
+        let barrageCount = 0;
+        let aiResponseCount = 0;
+        let barrageStats = {
+            types: {},
+            users: {},
+            totalInteractions: 0
+        };
+
+        // WebSocket连接
+        function connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws`;
+            
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = function(event) {
+                console.log('WebSocket连接已建立');
+            };
+            
+            ws.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                handleWebSocketMessage(data);
+            };
+            
+            ws.onclose = function(event) {
+                console.log('WebSocket连接已断开');
+                if (isMonitoring) {
+                    setTimeout(connectWebSocket, 3000);
+                }
+            };
+            
+            ws.onerror = function(error) {
+                console.error('WebSocket错误:', error);
+            };
+        }
+
+        // 处理WebSocket消息
+        function handleWebSocketMessage(data) {
+            switch(data.type) {
+                case 'barrage':
+                    displayBarrage(data.data);
+                    updateStats(data.data);
+                    break;
+                case 'ai_reply':
+                case 'manual_reply':
+                    displayAIResponse(data);
+                    if (data.audio_path) {
+                        playAudio(data.audio_path);
+                    }
+                    break;
+            }
+        }
+
+        // 显示弹幕
+        function displayBarrage(barrage) {
+            const container = document.getElementById('barrageContainer');
+            const waitingMsg = document.getElementById('waitingMsg');
+            
+            if (waitingMsg) {
+                waitingMsg.remove();
+            }
+            
+            const barrageItem = document.createElement('div');
+            barrageItem.className = 'barrage-item mb-2 p-2 border-l-4 border-primary/30 bg-white rounded';
+            
+            const typeColor = getTypeColor(barrage.type);
+            const timestamp = new Date(barrage.timestamp * 1000).toLocaleTimeString();
+            
+            barrageItem.innerHTML = `
+                <div class="flex justify-between items-start mb-1">
+                    <span class="text-xs px-2 py-1 rounded ${typeColor} font-medium">
+                        ${barrage.raw_type || barrage.type}
+                    </span>
+                    <span class="text-xs text-gray-400">${timestamp}</span>
+                </div>
+                <div class="font-medium text-sm text-gray-700">${barrage.user || ''}</div>
+                <div class="text-gray-900">${barrage.content || ''}</div>
+            `;
+            
+            container.appendChild(barrageItem);
+            container.scrollTop = container.scrollHeight;
+            
+            barrageCount++;
+            document.getElementById('barrageCount').textContent = `${barrageCount} 条弹幕`;
+            
+            while (container.children.length > 100) {
+                container.removeChild(container.firstChild);
+            }
+        }
+
+        // 显示AI回复
+        function displayAIResponse(response) {
+            const container = document.getElementById('aiResponseContainer');
+            const waitingMsg = document.getElementById('aiWaitingMsg');
+            
+            if (waitingMsg) {
+                waitingMsg.remove();
+            }
+            
+            const responseItem = document.createElement('div');
+            responseItem.className = 'ai-response mb-4 p-3 bg-blue-50 rounded-lg border-l-4 border-blue-400';
+            
+            const timestamp = new Date(response.timestamp * 1000).toLocaleTimeString();
+            const isManual = response.type === 'manual_reply';
+            
+            responseItem.innerHTML = `
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-xs px-2 py-1 rounded ${isManual ? 'bg-green-200 text-green-800' : 'bg-blue-200 text-blue-800'}">
+                        ${isManual ? '手动回复' : 'AI回复'}
+                    </span>
+                    <span class="text-xs text-gray-500">${timestamp}</span>
+                </div>
+                <div class="text-gray-900 font-medium">${response.text}</div>
+                ${response.audio_path ? `
+                    <div class="mt-2">
+                        <button onclick="playAudio('${response.audio_path}')" class="text-xs px-3 py-1 bg-green-100 text-green-800 rounded-full hover:bg-green-200 transition-colors">
+                            <i class="fa fa-play mr-1"></i>播放语音
+                        </button>
+                    </div>
+                ` : ''}
+            `;
+            
+            container.appendChild(responseItem);
+            container.scrollTop = container.scrollHeight;
+            
+            aiResponseCount++;
+            
+            while (container.children.length > 50) {
+                container.removeChild(container.firstChild);
+            }
+        }
+
+        // 获取类型颜色
+        function getTypeColor(type) {
+            const colors = {
+                'chat': 'bg-blue-100 text-blue-800',
+                'member': 'bg-green-100 text-green-800',
+                'gift': 'bg-purple-100 text-purple-800',
+                'like': 'bg-red-100 text-red-800',
+                'follow': 'bg-yellow-100 text-yellow-800',
+                'stats': 'bg-gray-100 text-gray-800'
+            };
+            return colors[type] || 'bg-gray-100 text-gray-800';
+        }
+
+        // 更新统计数据
+        function updateStats(barrage) {
+            barrageStats.types[barrage.type] = (barrageStats.types[barrage.type] || 0) + 1;
+            
+            if (barrage.username) {
+                barrageStats.users[barrage.username] = (barrageStats.users[barrage.username] || 0) + 1;
+            }
+            
+            barrageStats.totalInteractions++;
+            updateStatsDisplay();
+        }
+
+        // 更新统计显示（本地统计）
+        function updateStatsDisplay() {
+            // 如果数据分析区域可见，使用API数据
+            if (isMonitoring) {
+                fetchAnalyticsData();
+            }
+        }
+
+        // 获取分析数据
+        async function fetchAnalyticsData() {
+            try {
+                const response = await fetch('/api/analytics');
+                const data = await response.json();
+                
+                updateAnalyticsDisplay(data);
+                
+                // 显示分析数据，隐藏占位符
+                document.getElementById('statsPlaceholder').classList.add('hidden');
+                document.getElementById('analyticsData').classList.remove('hidden');
+                
+            } catch (error) {
+                console.error('获取分析数据失败:', error);
+            }
+        }
+
+        // 更新分析数据显示
+        function updateAnalyticsDisplay(data) {
+            const realtime = data.realtime || {};
+            
+            // 更新实时统计
+            document.getElementById('messages5min').textContent = realtime.messages_5min || 0;
+            document.getElementById('messages1hour').textContent = realtime.messages_1hour || 0;
+            document.getElementById('activeUsers').textContent = realtime.active_users_1hour || 0;
+            document.getElementById('aiReplies').textContent = realtime.ai_responses_1hour || 0;
+            
+            // 更新消息类型图表
+            const messageTypes = realtime.message_types || {};
+            const chartContainer = document.getElementById('messageTypesChart');
+            
+            const sortedTypes = Object.entries(messageTypes)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 5);
+            
+            chartContainer.innerHTML = sortedTypes.map(([type, count]) => {
+                const percentage = realtime.messages_1hour > 0 ? 
+                    Math.round((count / realtime.messages_1hour) * 100) : 0;
+                
+                return `
+                    <div class="flex items-center justify-between text-xs">
+                        <span class="text-gray-600">${getTypeName(type)}</span>
+                        <div class="flex items-center">
+                            <div class="w-12 h-2 bg-gray-200 rounded mr-2">
+                                <div class="h-2 bg-blue-500 rounded" style="width: ${percentage}%"></div>
+                            </div>
+                            <span class="font-medium text-gray-700">${count}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // 获取类型中文名称
+        function getTypeName(type) {
+            const typeNames = {
+                'chat': '聊天',
+                'member': '进场',
+                'gift': '礼物',
+                'like': '点赞',
+                'follow': '关注',
+                'stats': '统计',
+                'emoji_chat': '表情'
+            };
+            return typeNames[type] || type;
+        }
+
+        // 播放音频
+        function playAudio(audioPath) {
+            const audioPlayer = document.getElementById('audioPlayer');
+            audioPlayer.src = audioPath;
+            audioPlayer.play().catch(error => {
+                console.error('音频播放失败:', error);
+            });
+        }
+
+        // 切换直播监控
+        async function toggleLiveMonitoring() {
+            const liveId = document.getElementById('liveIdInput').value.trim();
+            const toggleBtn = document.getElementById('toggleBtn');
+            const toggleIcon = document.getElementById('toggleIcon');
+            const toggleText = document.getElementById('toggleText');
+            
+            if (!liveId) {
+                alert('请输入直播间ID');
+                return;
+            }
+            
+            toggleBtn.disabled = true;
+            
+            try {
+                if (!isMonitoring) {
+                    const response = await fetch('/api/start_live', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ live_id: liveId })
+                    });
+                    
+                    if (response.ok) {
+                        isMonitoring = true;
+                        toggleIcon.className = 'fa fa-stop';
+                        toggleText.textContent = '停止监控';
+                        toggleBtn.className = 'bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded transition-all duration-300 flex items-center space-x-1';
+                        
+                        if (!ws) {
+                            connectWebSocket();
+                        }
+                    } else {
+                        const error = await response.json();
+                        alert('启动失败: ' + error.detail);
+                    }
+                } else {
+                    const response = await fetch('/api/stop_live', {
+                        method: 'POST'
+                    });
+                    
+                    if (response.ok) {
+                        isMonitoring = false;
+                        toggleIcon.className = 'fa fa-play';
+                        toggleText.textContent = '弹幕获取';
+                        toggleBtn.className = 'bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded transition-all duration-300 flex items-center space-x-1';
+                        
+                        if (ws) {
+                            ws.close();
+                            ws = null;
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('操作失败:', error);
+                alert('操作失败，请检查网络连接');
+            } finally {
+                toggleBtn.disabled = false;
+            }
+        }
+
+        // 发送手动回复
+        async function sendManualReply() {
+            const input = document.getElementById('manualReplyInput');
+            const text = input.value.trim();
+            
+            if (!text) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/manual_reply', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ text: text })
+                });
+                
+                if (response.ok) {
+                    input.value = '';
+                } else {
+                    alert('发送失败');
+                }
+            } catch (error) {
+                console.error('发送手动回复失败:', error);
+                alert('发送失败，请检查网络连接');
+            }
+        }
+
+        // 处理回车键
+        function handleManualReplyKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendManualReply();
+            }
+        }
+
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('抖音直播弹幕语音客服系统已加载');
+            connectWebSocket();
+            
+            setInterval(() => {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'ping' }));
+                }
+            }, 30000);
+            
+            // 定时刷新分析数据（每30秒）
+            setInterval(() => {
+                if (isMonitoring) {
+                    fetchAnalyticsData();
+                }
+            }, 30000);
+        });
+    </script>
+</body>
+</html> 
