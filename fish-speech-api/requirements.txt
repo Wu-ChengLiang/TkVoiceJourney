@@ -1,4 +1,31 @@
-httpx
-ormsgpack
-pydantic
-fish-audio-sdk 
+# 核心依赖
+httpx>=0.25.0
+ormsgpack>=1.4.0
+openai>=1.0.0
+websockets>=11.0.0
+
+# 音频处理
+pydub>=0.25.0
+pygame>=2.5.0
+
+# 环境配置
+python-dotenv>=1.0.0
+
+# 数据处理
+numpy>=1.24.0
+
+# 异步支持
+asyncio-mqtt>=0.13.0
+
+# 类型注解支持
+typing-extensions>=4.7.0
+
+# Web框架 (可选，用于API服务)
+fastapi>=0.100.0
+uvicorn>=0.23.0
+
+# 日志
+loguru>=0.7.0
+
+# 工具
+pathlib2>=2.3.0 

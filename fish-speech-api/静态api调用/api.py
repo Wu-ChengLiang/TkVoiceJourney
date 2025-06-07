@@ -1,32 +1,5 @@
-# python -m tools.api_server \
-#     --listen 0.0.0.0:8080 \
-#     --llama-checkpoint-path "checkpoints/openaudio-s1-mini" \
-#     --decoder-checkpoint-path "checkpoints/openaudio-s1-mini/codec.pth" \
-#     --decoder-config-name modded_dac_vq
-
 #https://speech.fish.audio/inference/ 
 
-# SDK开发，Option 3: Specifying a specific TTS model using the backend parameter
-# with open("output3.mp3", "wb") as f:
-#     for chunk in session.tts(
-#         TTSRequest(text="床也舒服，床有一种魔力,感觉要长在上面了"),
-#         backend="s1-mini"  # Specify the TTS model to use
-#     ):
-#         f.write(chunk)
-
-# Fish Audio TTS API 调用示例
-# 基于官方文档: https://docs.fish.audio/text-to-speech/text-to-speech
-
-# SDK开发方式示例（需要安装 fish-audio-sdk）:
-# pip install fish-audio-sdk
-# from fish_audio_sdk import Session, TTSRequest
-# session = Session("your_api_key")
-# with open("output3.mp3", "wb") as f:
-#     for chunk in session.tts(
-#         TTSRequest(text="床也舒服，床有一种魔力,感觉要长在上面了"),
-#         backend="s1-mini"  # 指定TTS模型
-#     ):
-#         f.write(chunk)
 
 from typing import Annotated, Literal
 import httpx

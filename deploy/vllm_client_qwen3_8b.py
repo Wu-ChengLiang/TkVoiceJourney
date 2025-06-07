@@ -109,7 +109,6 @@ def main():
     # 初始化客户端 - 请根据实际情况修改base_url
     base_url = "https://u690372-8e79-a795d08c.cqa1.seetacloud.com:8443/v1"  # 修改为您的VLLM服务地址
     
-
     client = VLLMClient(base_url)
     
     # 测试连接
@@ -131,7 +130,7 @@ def main():
     print("\n=== 示例2: 简单生成（移除思维链） ===")
 
     # pormpt 是抖音弹幕，
-    prompt2 = ""
+    prompt2 = "你是一个餐饮抖音客服，按照语气回答"
     answer2 = client.generate_simple(prompt2)
     print(f"{answer2}")
     # 把这个输入到tts 接口，然后导出文件存储到文件夹，并且自动清理 自动播放mp3格式文件，并且

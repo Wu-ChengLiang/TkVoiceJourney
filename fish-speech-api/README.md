@@ -1,204 +1,342 @@
-# Fish Audio TTS 集成
+# TkVoiceJourney - OpenAI兼容的Fish Audio TTS系统
 
-基于 [Fish Audio 官方文档](https://docs.fish.audio/introduction) 的文本转语音(TTS)服务集成。
+🎵 一个完全兼容OpenAI API的语音合成和对话系统，基于Fish Audio TTS和多种LLM后端。
 
-## 📋 功能特性
+## ✨ 特性
 
-- ✅ 支持 SDK 和 Raw API 两种调用方式
-- ✅ 支持多种 TTS 模型 (`speech-1.5`, `speech-1.6`, `s1`, `s1-mini`)
-- ✅ 支持参考音频进行声音克隆
-- ✅ 支持多种音频格式 (MP3, WAV, PCM)
-- ✅ 支持不同音质设置
-- ✅ 完善的错误处理和日志
-- ✅ 中英文混合支持
+- 🔄 **OpenAI API 完全兼容** - 像使用OpenAI SDK一样简单
+- 🎯 **一键切换LLM后端** - 支持OpenAI和vLLM无缝切换
+- 🎵 **高质量TTS** - 基于Fish Audio的实时语音合成
+- 🔐 **安全配置** - 通过.env文件管理所有密钥，代码中不暴露
+- 🌊 **流式处理** - 支持实时流式对话和TTS生成
+- 🎭 **集成功能** - 流式对话+实时TTS一体化
 
-## 🛠️ 安装依赖
+## 🚀 快速开始
+
+### 1. 环境配置
+
+克隆项目后，在根目录创建 `.env` 文件：
+
+```bash
+# 复制示例配置
+cp .env.example .env
+```
+
+编辑 `.env` 文件：
+
+```env
+# ===========================================
+# TkVoiceJourney 环境配置文件
+# ===========================================
+
+# ==================== LLM配置 ====================
+# 当前使用模式：可选择 "openai" 或 "vllm"
+LLM_MODE=openai
+
+# OpenAI 配置
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_MODEL=gpt-4o-mini
+
+# VLLM 配置
+VLLM_BASE_URL=https://your-vllm-endpoint.com/v1
+VLLM_API_KEY=EMPTY
+VLLM_MODEL=Qwen2.5-7B-Instruct
+
+# ==================== Fish Audio TTS配置 ====================
+# Fish Audio API密钥
+FISH_API_KEY=your_fish_api_key_here
+
+# Fish Audio WebSocket URL
+FISH_WS_URL=wss://api.fish.audio/v1/tts/live
+
+# Fish Audio参考音色ID（从playground获取）
+FISH_REFERENCE_ID=your_reference_id_here
+
+# TTS参数配置
+TTS_FORMAT=mp3
+TTS_LATENCY=normal
+TTS_TEMPERATURE=0.7
+TTS_TOP_P=0.7
+TTS_BACKEND=speech-1.6
+```
+
+### 2. 获取API密钥
+
+#### Fish Audio 配置
+1. 访问 [Fish Audio](https://fish.audio)
+2. 注册账户并获取API Key
+3. 在Playground中选择或创建音色，获取Reference ID
+
+#### OpenAI 配置（如果使用OpenAI模式）
+1. 访问 [OpenAI Platform](https://platform.openai.com)
+2. 获取API Key
+
+#### vLLM 配置（如果使用vLLM模式）
+1. 部署vLLM服务
+2. 配置Base URL和模型名称
+
+### 3. 安装依赖
 
 ```bash
 pip install -r requirements.txt
 ```
 
-或手动安装：
+### 4. 运行示例
 
 ```bash
-pip install httpx ormsgpack pydantic fish-audio-sdk
+# 运行完整示例
+python examples/openai_usage_example.py
+
+# 测试配置
+python src/config.py
+
+# 测试LLM连接
+python src/core/vllm_stream.py
+
+# 测试Fish Audio TTS
+python src/core/fish_websocket.py
 ```
 
-## 🔑 API 配置
+## 📖 使用方法
 
-API Key 已经配置在代码中：`c519c7c1b9a249069c078110c9ed4af9`
+### OpenAI兼容API
 
-## 📁 文件说明
-
-- `fish_tts_client.py` - 完整的 TTS 客户端类（推荐使用）
-- `api.py` - 改进的基础 API 调用示例
-- `example_usage.py` - 详细使用示例
-- `requirements.txt` - 依赖文件
-
-## 🚀 快速开始
-
-### 方式1：使用 TTS 客户端类（推荐）
+完全按照OpenAI SDK的方式使用：
 
 ```python
-from fish_tts_client import FishTTSClient
+from src.core.openai_compatible import OpenAI
 
-# 初始化客户端
-client = FishTTSClient()
+# 创建客户端
+client = OpenAI()
 
-# 基本文本转语音
-success = client.tts(
-    text="你好世界！欢迎使用Fish Audio。",
-    output_file="output.mp3",
-    model="s1-mini"
+# 聊天完成
+response = await client.chat.create(
+    messages=[
+        {"role": "system", "content": "你是一个友好的助手"},
+        {"role": "user", "content": "你好"}
+    ],
+    stream=False
+)
+
+# 流式聊天
+stream = await client.chat.create(
+    messages=[{"role": "user", "content": "介绍一下AI"}],
+    stream=True
+)
+
+async for chunk in stream:
+    if chunk['choices'][0]['delta'].get('content'):
+        print(chunk['choices'][0]['delta']['content'], end="")
+
+# 文本转语音
+audio_data = await client.audio.speech.create(
+    model="tts-1",
+    input="你好，这是测试音频",
+    voice="alloy",
+    response_format="mp3"
+)
+
+with open("output.mp3", "wb") as f:
+    f.write(audio_data)
+```
+
+### 集成流式对话+TTS
+
+```python
+from src.core.openai_compatible import OpenAICompatibleClient
+
+client = OpenAICompatibleClient()
+
+# 流式对话+实时TTS
+stream = client.stream_chat_with_tts(
+    user_input="介绍一下Python",
+    system_prompt="你是一个技术专家",
+    enable_tts=True
+)
+
+async for chunk in stream:
+    if chunk['type'] == 'text':
+        print(chunk['content'], end="")
+    elif chunk['type'] == 'audio':
+        # 处理音频数据
+        audio_data = base64.b64decode(chunk['content'])
+        # 保存或播放音频
+```
+
+## 🔄 LLM模式切换
+
+### 切换到OpenAI模式
+
+编辑 `.env` 文件：
+
+```env
+LLM_MODE=openai
+OPENAI_API_KEY=your_openai_key
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_MODEL=gpt-4o-mini
+```
+
+### 切换到vLLM模式
+
+编辑 `.env` 文件：
+
+```env
+LLM_MODE=vllm
+VLLM_BASE_URL=https://your-vllm-endpoint.com/v1
+VLLM_API_KEY=EMPTY
+VLLM_MODEL=Qwen2.5-7B-Instruct
+```
+
+重启应用即可自动切换。
+
+## 🏗️ 项目结构
+
+```
+fish-speech-api/
+├── .env                          # 环境配置文件（根目录）
+├── requirements.txt              # 依赖包列表
+├── README.md                     # 项目说明
+├── examples/
+│   └── openai_usage_example.py   # OpenAI兼容API使用示例
+└── src/
+    ├── config.py                 # 配置管理
+    └── core/
+        ├── vllm_stream.py        # 统一LLM客户端
+        ├── fish_websocket.py     # Fish Audio WebSocket客户端
+        ├── openai_compatible.py  # OpenAI兼容API封装
+        └── audio_player.py       # 音频播放器
+```
+
+## 🔧 配置参数说明
+
+### LLM配置
+
+| 参数 | 说明 | 默认值 |
+|------|------|--------|
+| `LLM_MODE` | LLM模式 (`openai` 或 `vllm`) | `openai` |
+| `OPENAI_API_KEY` | OpenAI API密钥 | - |
+| `OPENAI_BASE_URL` | OpenAI API地址 | `https://api.openai.com/v1` |
+| `OPENAI_MODEL` | OpenAI模型名称 | `gpt-4o-mini` |
+| `VLLM_BASE_URL` | vLLM服务地址 | - |
+| `VLLM_API_KEY` | vLLM API密钥 | `EMPTY` |
+| `VLLM_MODEL` | vLLM模型名称 | `Qwen2.5-7B-Instruct` |
+
+### Fish Audio TTS配置
+
+| 参数 | 说明 | 默认值 |
+|------|------|--------|
+| `FISH_API_KEY` | Fish Audio API密钥 | - |
+| `FISH_WS_URL` | WebSocket地址 | `wss://api.fish.audio/v1/tts/live` |
+| `FISH_REFERENCE_ID` | 音色参考ID | - |
+| `TTS_FORMAT` | 音频格式 | `mp3` |
+| `TTS_LATENCY` | 延迟模式 | `normal` |
+| `TTS_TEMPERATURE` | 生成温度 | `0.7` |
+| `TTS_TOP_P` | Top-P采样 | `0.7` |
+| `TTS_BACKEND` | TTS后端模型 | `speech-1.6` |
+
+### 应用配置
+
+| 参数 | 说明 | 默认值 |
+|------|------|--------|
+| `OUTPUT_DIR` | 输出目录 | `output` |
+| `TEMP_DIR` | 临时目录 | `temp` |
+| `DEBUG` | 调试模式 | `false` |
+| `AUDIO_PLAYER_ENABLED` | 音频播放 | `true` |
+
+## 🎯 API参考
+
+### Chat Completions
+
+完全兼容OpenAI Chat Completions API：
+
+```python
+# 支持的参数
+await client.chat.create(
+    messages=[...],           # 消息列表
+    model="gpt-3.5-turbo",   # 模型名称（保持兼容）
+    stream=False,            # 是否流式
+    temperature=0.7,         # 温度
+    max_tokens=1000,         # 最大tokens
 )
 ```
 
-### 方式2：使用基础 API
+### Audio Speech
+
+完全兼容OpenAI Audio Speech API：
 
 ```python
-from api import text_to_speech
-
-# 调用TTS
-success = text_to_speech(
-    text="Hello, world!",
-    output_file="hello.mp3",
-    model="speech-1.5"
+# 支持的参数
+await client.audio.speech.create(
+    model="tts-1",           # TTS模型（保持兼容）
+    input="文本内容",         # 输入文本
+    voice="alloy",           # 音色（保持兼容）
+    response_format="mp3",   # 响应格式
+    speed=1.0                # 语速（保持兼容）
 )
 ```
 
-## 🎵 使用示例
-
-### 1. 基本文本转语音
-
-```python
-client = FishTTSClient()
-
-# 中文
-client.tts("你好世界", "chinese.mp3")
-
-# 英文  
-client.tts("Hello world", "english.mp3")
-```
-
-### 2. 使用不同模型
-
-```python
-models = ["speech-1.5", "speech-1.6", "s1", "s1-mini"]
-
-for model in models:
-    client.tts(
-        text=f"这是{model}模型的测试",
-        output_file=f"test_{model}.mp3",
-        model=model
-    )
-```
-
-### 3. 使用参考音频进行声音克隆
-
-```python
-# 需要有参考音频文件
-client.tts(
-    text="这是声音克隆的测试",
-    output_file="cloned_voice.mp3",
-    use_sdk=False,  # Raw API 支持参考音频
-    reference_audio=("reference.wav", "参考音频的文本"),
-    model="speech-1.5"
-)
-```
-
-### 4. 不同音频格式
-
-```python
-# MP3 格式
-client.tts(
-    text="MP3格式测试",
-    output_file="test.mp3",
-    use_sdk=False,
-    format="mp3",
-    mp3_bitrate=192
-)
-
-# WAV 格式
-client.tts(
-    text="WAV格式测试", 
-    output_file="test.wav",
-    use_sdk=False,
-    format="wav"
-)
-```
-
-### 5. 使用参考模型ID
-
-```python
-# 从 Fish Audio Playground 获取模型ID
-client.tts(
-    text="使用预训练模型",
-    output_file="model_voice.mp3",
-    reference_id="7f92f8afb8ec43bf81429cc1c9199cb1"
-)
-```
-
-## 🔧 可用参数
-
-### TTS 模型
-- `speech-1.5` - 标准模型
-- `speech-1.6` - 改进模型  
-- `s1` - 高质量模型
-- `s1-mini` - 轻量级模型（推荐）
-
-### 音频格式
-- `mp3` - MP3格式 (默认)
-- `wav` - WAV格式
-- `pcm` - PCM格式
-
-### MP3 比特率
-- `64` - 低质量
-- `128` - 标准质量 (默认)
-- `192` - 高质量
-
-### 延迟模式
-- `normal` - 正常延迟 (默认)
-- `balanced` - 平衡模式 (300ms延迟)
-
-## 🏃‍♂️ 运行示例
+## 🧪 测试
 
 ```bash
-# 运行完整测试示例
-python example_usage.py
+# 运行所有测试
+python examples/openai_usage_example.py
 
-# 运行基础API测试
-python api.py
+# 测试特定组件
+python src/core/vllm_stream.py
+python src/core/fish_websocket.py
+python src/core/openai_compatible.py
 
-# 运行客户端类测试
-python fish_tts_client.py
+# 检查配置
+python src/config.py
 ```
 
-## 📊 API 限制
+## 🔍 故障排除
 
-根据 [Fish Audio 文档](https://docs.fish.audio/introduction)：
+### 常见问题
 
-- 请查看官方的 Rate Limits 页面了解具体限制
-- 建议加入 Developer Program 获得更好的支持
+1. **连接失败**
+   - 检查 `.env` 文件中的API密钥是否正确
+   - 确认网络连接正常
+   - 验证Fish Audio余额是否充足
+
+2. **音频生成失败**
+   - 确认Fish Audio API Key和Reference ID正确
+   - 检查文本内容是否符合要求
+
+3. **LLM响应异常**
+   - 验证LLM模式配置
+   - 检查对应的API密钥和地址
+
+### 健康检查
+
+```python
+from src.core.openai_compatible import OpenAICompatibleClient
+
+client = OpenAICompatibleClient()
+health = await client.health_check()
+print(health)
+```
+
+## 📝 更新日志
+
+### v1.0.0
+- ✅ OpenAI API完全兼容
+- ✅ 支持OpenAI和vLLM切换
+- ✅ Fish Audio TTS集成
+- ✅ 流式对话+TTS
+- ✅ 安全的环境配置
+
+## 🤝 贡献
+
+欢迎提交Issue和Pull Request！
+
+## 📄 许可证
+
+MIT License
 
 ## 🔗 相关链接
 
-- [Fish Audio 官方文档](https://docs.fish.audio/introduction)
-- [TTS API 文档](https://docs.fish.audio/text-to-speech/text-to-speech)
-- [Fish Audio Playground](https://fish.audio/)
-- [Python SDK GitHub](https://github.com/fishaudio/fish-audio-sdk)
-
-## ⚠️ 注意事项
-
-1. **API Key 安全**：生产环境中应使用环境变量存储 API Key
-2. **文件路径**：确保输出路径有写入权限
-3. **参考音频**：使用参考音频时确保文件存在且格式正确
-4. **网络连接**：确保网络连接稳定，TTS 请求可能需要一些时间
-5. **错误处理**：建议在实际应用中添加重试机制
-
-## 🎯 最佳实践
-
-1. **优先使用 SDK**：SDK 提供更好的错误处理和功能
-2. **选择合适模型**：`s1-mini` 适合大多数场景，速度快质量好
-3. **音频格式选择**：MP3 适合存储，WAV 适合后续处理
-4. **参考音频质量**：使用高质量、清晰的参考音频效果更好
-5. **批量处理**：大量文本建议分批处理避免超时 
+- [Fish Audio 官网](https://fish.audio)
+- [OpenAI API 文档](https://platform.openai.com/docs)
+- [vLLM 项目](https://github.com/vllm-project/vllm) 
