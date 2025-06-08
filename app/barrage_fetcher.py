@@ -103,7 +103,6 @@ class BarrageFetcher:
             }
             
             self._async_callback(barrage_data)
-            logger.info(f"【聊天msg】[{user_id}]{nickname}: {content}")
             
         except Exception as e:
             logger.error(f"处理聊天消息失败: {e}")
@@ -131,7 +130,6 @@ class BarrageFetcher:
             }
             
             self._async_callback(barrage_data)
-            logger.info(f"【进场msg】[{user_id}][{gender}]{nickname} 进入了直播间")
             
         except Exception as e:
             logger.error(f"处理进场消息失败: {e}")
@@ -160,7 +158,6 @@ class BarrageFetcher:
             }
             
             self._async_callback(barrage_data)
-            logger.info(f"【礼物msg】[{user_id}]{nickname} 送出 {gift_name} x{gift_count}")
             
         except Exception as e:
             logger.error(f"处理礼物消息失败: {e}")
@@ -187,7 +184,6 @@ class BarrageFetcher:
             }
             
             self._async_callback(barrage_data)
-            logger.info(f"【点赞msg】[{user_id}]{nickname} 点赞 x{count}")
             
         except Exception as e:
             logger.error(f"处理点赞消息失败: {e}")
@@ -210,7 +206,6 @@ class BarrageFetcher:
             }
             
             self._async_callback(barrage_data)
-            logger.info(f"【直播间统计msg】{display_long}")
             
         except Exception as e:
             logger.error(f"处理统计消息失败: {e}")
@@ -235,7 +230,6 @@ class BarrageFetcher:
             }
             
             self._async_callback(barrage_data)
-            logger.info(f"【关注msg】[{user_id}]{nickname} 关注了主播")
             
         except Exception as e:
             logger.error(f"处理关注消息失败: {e}")
@@ -261,7 +255,6 @@ class BarrageFetcher:
             }
             
             self._async_callback(barrage_data)
-            logger.info(f"【表情聊天msg】[{user_id}]{nickname}: {content}")
             
         except Exception as e:
             logger.error(f"处理表情聊天消息失败: {e}")
