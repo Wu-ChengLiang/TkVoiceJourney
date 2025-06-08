@@ -32,8 +32,8 @@ load_dotenv(project_root / ".env")
 
 # 导入项目模块
 from barrage_fetcher import BarrageFetcher
-from ai_judge import create_ai_judge
-from tts_client import TTSClient
+from ai_judge_simple import create_ai_judge
+from tts_client import create_tts_client
 from data_analytics import analytics
 
 # 配置日志
@@ -44,11 +44,12 @@ logging.basicConfig(
 
 # 设置特定模块的日志级别
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)  # 主应用保持INFO级别
+logger.setLevel(logging.DEBUG)  # 主应用启用DEBUG级别调试
 
 # 设置其他模块的日志级别
 logging.getLogger("barrage_fetcher").setLevel(logging.WARNING)  # 弹幕获取器只显示警告和错误
-logging.getLogger("ai_judge").setLevel(logging.INFO)  # AI判断保持INFO
+logging.getLogger("ai_judge").setLevel(logging.DEBUG)  # AI判断启用DEBUG级别调试
+logging.getLogger("ai_judge_simple").setLevel(logging.DEBUG)  # AI判断简化版也启用DEBUG
 logging.getLogger("tts_client").setLevel(logging.INFO)  # TTS客户端保持INFO
 logging.getLogger("data_analytics").setLevel(logging.WARNING)  # 数据分析只显示警告和错误
 
@@ -112,17 +113,17 @@ class ManualReplyRequest(BaseModel):
 # 全局变量
 barrage_fetcher: Optional[BarrageFetcher] = None
 ai_judge = None
-tts_client: Optional[TTSClient] = None
+tts_client = None
 barrage_buffer: List[Dict] = []
 last_ai_check_time = time.time()
 
-# 智能弹幕处理系统
+# 智能弹幕处理系统 - 使用OpenAI+Fish Audio流式语音回复
 async def process_barrage_intelligently():
-    """智能弹幕处理 - 事件驱动模式"""
+    """智能弹幕处理 - 每次筛选后都调用OpenAI+Fish Audio生成语音回复"""
     global barrage_buffer
     
     while True:
-        await asyncio.sleep(1)  # 1秒检查一次
+        await asyncio.sleep(2)  # 1秒检查一次
         
         if not barrage_buffer:
             continue
@@ -139,25 +140,41 @@ async def process_barrage_intelligently():
         if not new_barrages:
             continue
             
-        # 使用优化版AI判断器处理弹幕
+        # 使用优化版AI判断器筛选有价值的弹幕并生成OpenAI回复
         if ai_judge and hasattr(ai_judge, 'process_barrage_stream'):
             for barrage in new_barrages:
                 try:
+                    # 调试：打印弹幕数据结构
+                    logger.debug(f"🔍 处理弹幕数据: {barrage}")
+                    
+                    # 直接使用process_barrage_stream处理弹幕（已包含筛选+回复生成）
                     reply_text = await ai_judge.process_barrage_stream(barrage)
+                    
                     if reply_text:
-                        await _handle_ai_reply(reply_text, [barrage], current_time)
+                        logger.info(f"🎯 筛选出有价值弹幕，生成回复: {reply_text}")
+                        # 调用Fish Audio生成语音
+                        await _handle_openai_fish_reply(reply_text, [barrage], current_time)
+                        # 限制频率，避免过于频繁回复
+                        await asyncio.sleep(5)
+                        break  # 一次只处理一条，避免同时回复多条
+                    else:
+                        logger.debug(f"❌ 弹幕未通过筛选: {barrage.get('content', '')[:30]}...")
                         
                 except Exception as e:
                     logger.error(f"智能处理弹幕失败: {e}")
+                    import traceback
+                    logger.error(traceback.format_exc())
         
         # 兼容旧版AI判断器
         elif ai_judge:
             try:
                 ai_result = await ai_judge.judge_barrages(new_barrages)
                 if ai_result and ai_result.get('has_value'):
+                    # 调用OpenAI生成回复
                     reply_text = await ai_judge.generate_reply(ai_result.get('content', ''))
                     if reply_text:
-                        await _handle_ai_reply(reply_text, new_barrages, current_time)
+                        await _handle_openai_fish_reply(reply_text, new_barrages, current_time)
+                        await asyncio.sleep(5)  # 限制频率
                         
             except Exception as e:
                 logger.error(f"AI处理失败: {e}")
@@ -168,13 +185,17 @@ async def process_barrage_intelligently():
             if current_time - barrage.get('timestamp', 0) <= 60  # 保留最近60秒
         ]
 
-async def _handle_ai_reply(reply_text: str, source_barrages: List[Dict], timestamp: float):
-    """处理AI回复"""
+async def _handle_openai_fish_reply(reply_text: str, source_barrages: List[Dict], timestamp: float):
+    """处理OpenAI+Fish Audio流式语音回复"""
     try:
-        # TTS语音合成
+        logger.info(f"🤖 OpenAI生成回复: {reply_text}")
+        
+        # 使用Fish Audio WebSocket TTS生成语音（流式）
         audio_path = None
         if tts_client:
             audio_path = await tts_client.text_to_speech(reply_text)
+            if audio_path:
+                logger.info(f"🎵 Fish Audio语音已生成: {audio_path}")
         
         # 广播AI回复
         await manager.broadcast({
@@ -182,7 +203,8 @@ async def _handle_ai_reply(reply_text: str, source_barrages: List[Dict], timesta
             'text': reply_text,
             'audio_path': audio_path,
             'timestamp': timestamp,
-            'source_content': source_barrages[0].get('content', '') if source_barrages else ''
+            'source_content': source_barrages[0].get('content', '') if source_barrages else '',
+            'generation_method': 'OpenAI+FishAudio'
         })
         
         # 保存AI回复记录
@@ -190,17 +212,22 @@ async def _handle_ai_reply(reply_text: str, source_barrages: List[Dict], timesta
             'text': reply_text,
             'audio_path': audio_path,
             'timestamp': timestamp,
-            'source_barrages': source_barrages
+            'source_barrages': source_barrages,
+            'generation_method': 'OpenAI+FishAudio'
         }
         manager.ai_responses.append(ai_response_data)
         
         # 添加到数据分析
         analytics.add_ai_response(ai_response_data)
         
-        logger.info(f"✅ AI回复已生成: {reply_text}")
+        logger.info(f"✅ OpenAI+Fish Audio流式回复完成: {reply_text}")
         
     except Exception as e:
-        logger.error(f"处理AI回复失败: {e}")
+        logger.error(f"处理OpenAI+Fish Audio回复失败: {e}")
+
+async def _handle_ai_reply(reply_text: str, source_barrages: List[Dict], timestamp: float):
+    """处理AI回复（兼容旧版本）"""
+    await _handle_openai_fish_reply(reply_text, source_barrages, timestamp)
 
 # 路由定义
 @app.get("/", response_class=HTMLResponse)
@@ -261,19 +288,36 @@ async def stop_live_monitoring():
 
 @app.post("/api/manual_reply")
 async def manual_reply(request: ManualReplyRequest):
-    """手动回复"""
+    """手动回复（支持OpenAI语音流式回复）"""
     try:
-        if tts_client:
-            audio_path = await tts_client.text_to_speech(request.text)
+        reply_text = request.text
+        
+        # 如果需要使用OpenAI生成回复（当输入为空或特殊指令时）
+        if not reply_text.strip() or reply_text.strip().startswith("@ai"):
+            # 获取最近的弹幕作为上下文
+            recent_barrages = barrage_buffer[-5:] if barrage_buffer else []
+            if recent_barrages and ai_judge:
+                context = recent_barrages[-1].get('content', '客户咨询')
+                reply_text = await ai_judge.generate_reply(context)
+                if not reply_text:
+                    reply_text = "您好，感谢您的咨询，具体信息请联系我们的客服"
+        
+        # 使用Fish Audio TTS生成语音（流式）
+        if tts_client and reply_text:
+            audio_path = await tts_client.text_to_speech(reply_text)
             if audio_path:
                 await manager.broadcast({
                     'type': 'manual_reply',
-                    'text': request.text,
+                    'text': reply_text,
                     'audio_path': audio_path,
-                    'timestamp': time.time()
+                    'timestamp': time.time(),
+                    'is_ai_generated': request.text.strip().startswith("@ai") or not request.text.strip()
                 })
                 
-        return {"status": "success", "message": "手动回复已发送"}
+                logger.info(f"✅ 手动回复已发送: {reply_text}")
+                return {"status": "success", "message": "手动回复已发送", "reply_text": reply_text}
+        
+        return {"status": "error", "message": "语音生成失败"}
         
     except Exception as e:
         logger.error(f"手动回复失败: {e}")
@@ -431,14 +475,14 @@ async def startup_event():
     
     # 初始化TTS客户端
     try:
-        tts_client = TTSClient()
+        tts_client = create_tts_client()
         logger.info("✅ TTS客户端初始化成功")
     except Exception as e:
         logger.error(f"❌ TTS客户端初始化失败: {e}")
     
-    # 启动智能弹幕处理
+    # 启动智能弹幕处理（OpenAI+Fish Audio流式语音回复）
     asyncio.create_task(process_barrage_intelligently())
-    logger.info("✅ 智能弹幕处理任务已启动")
+    logger.info("✅ 智能弹幕处理任务已启动（OpenAI+Fish Audio流式语音回复）")
 
 # 应用关闭事件
 @app.on_event("shutdown")
