@@ -242,6 +242,8 @@
             users: {},
             totalInteractions: 0
         };
+        // 添加AI回复去重缓存
+        let displayedAIResponses = new Set();
 
         // WebSocket连接
         function connectWebSocket() {
@@ -327,6 +329,24 @@
 
         // 显示AI回复
         function displayAIResponse(response) {
+            // 生成唯一标识符用于去重
+            const responseId = `${response.timestamp}_${response.text.substring(0, 50)}`;
+            
+            // 检查是否已经显示过这个回复
+            if (displayedAIResponses.has(responseId)) {
+                console.log('跳过重复的AI回复:', response.text.substring(0, 30) + '...');
+                return;
+            }
+            
+            // 记录已显示的回复
+            displayedAIResponses.add(responseId);
+            
+            // 清理过期的记录（保留最近100条记录）
+            if (displayedAIResponses.size > 100) {
+                const array = Array.from(displayedAIResponses);
+                displayedAIResponses = new Set(array.slice(-80)); // 保留最后80条
+            }
+            
             const container = document.getElementById('aiResponseContainer');
             const waitingMsg = document.getElementById('aiWaitingMsg');
             
@@ -519,9 +539,12 @@
                         toggleText.textContent = '停止监控';
                         toggleBtn.className = 'bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded transition-all duration-300 flex items-center space-x-1';
                         
-                        if (!ws) {
-                            connectWebSocket();
+                        // 先关闭现有连接再建立新连接
+                        if (ws) {
+                            ws.close();
+                            ws = null;
                         }
+                        connectWebSocket();
                     } else {
                         const error = await response.json();
                         alert('启动失败: ' + error.detail);
@@ -590,7 +613,8 @@
         // 页面加载完成后初始化
         document.addEventListener('DOMContentLoaded', function() {
             console.log('抖音直播弹幕语音客服系统已加载');
-            connectWebSocket();
+            // 不在页面加载时自动连接WebSocket，等待用户点击开始按钮
+            // connectWebSocket();
             
             setInterval(() => {
                 if (ws && ws.readyState === WebSocket.OPEN) {
