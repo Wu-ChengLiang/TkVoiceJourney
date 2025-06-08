@@ -1,27 +1,20 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-AI回复生成器
-使用OpenAI流式输出和固定模板回复（模板功能已注释）
+AI回复生成器 - 纯OpenAI流式回复版本
+专为Madoka鸠隐日式居酒屋定制
 """
 
 import asyncio
-import hashlib
 import json
 import logging
-import random
 import re
 import time
-from typing import AsyncIterator, Dict, List, Optional, Tuple
+from typing import AsyncIterator, Optional
 from dataclasses import dataclass
 
 import httpx
-from config import (
-    OPENAI_CONFIG, 
-    # TEMPLATE_REPLIES,  # 模板回复已注释
-    # HIGH_VALUE_KEYWORDS,  # 高价值关键词已注释
-    RESTAURANT_CONFIG
-)
+from config import OPENAI_CONFIG, RESTAURANT_CONFIG
 
 logger = logging.getLogger(__name__)
 
@@ -30,83 +23,20 @@ logger = logging.getLogger(__name__)
 class ReplyResult:
     """回复结果"""
     text: str
-    is_template: bool = False
     category: str = "AI生成"
     confidence: float = 0.9
     generation_time: float = 0.0
 
 
-# class TemplateReplyGenerator:
-#     """模板回复生成器 - 已注释禁用"""
-#     
-#     def __init__(self):
-#         self.template_cache = {}
-#         self.usage_stats = {category: 0 for category in TEMPLATE_REPLIES.keys()}
-#     
-#     def detect_category(self, content: str) -> str:
-#         """检测弹幕内容类别"""
-#         content = content.lower()
-#         
-#         # 按优先级检测关键词
-#         for category, keywords in HIGH_VALUE_KEYWORDS.items():
-#             for keyword in keywords:
-#                 if keyword in content:
-#                     return category
-#         
-#         return "默认"
-#     
-#     def generate_template_reply(self, content: str, category: str = None) -> ReplyResult:
-#         """生成模板回复"""
-#         if not category:
-#             category = self.detect_category(content)
-#         
-#         # 获取该类别的模板
-#         templates = TEMPLATE_REPLIES.get(category, TEMPLATE_REPLIES["默认"])
-#         
-#         # 随机选择一个模板（避免重复）
-#         self.usage_stats[category] += 1
-#         template_index = self.usage_stats[category] % len(templates)
-#         reply_text = templates[template_index]
-#         
-#         # 替换占位符
-#         reply_text = self._replace_placeholders(reply_text, category)
-#         
-#         return ReplyResult(
-#             text=reply_text,
-#             is_template=True,
-#             category=category,
-#             confidence=0.8,
-#             generation_time=0.01
-#         )
-#     
-#     def _replace_placeholders(self, text: str, category: str) -> str:
-#         """替换模板中的占位符"""
-#         replacements = {
-#             'xx': RESTAURANT_CONFIG['avg_price'],
-#             '美味餐厅': RESTAURANT_CONFIG['name'],
-#             'XX餐厅': RESTAURANT_CONFIG['name'],
-#             'xx菜系': RESTAURANT_CONFIG['cuisine_type'],
-#             'xx公里': '5',
-#             'xx站': '市中心',
-#             'xx平台': '美团/饿了么',
-#             'xx元起': f"{RESTAURANT_CONFIG['avg_price']}元起"
-#         }
-#         
-#         for placeholder, replacement in replacements.items():
-#             text = text.replace(placeholder, replacement)
-#         
-#         return text
-
-
 class OpenAIStreamReplyGenerator:
-    """OpenAI流式回复生成器"""
+    """OpenAI流式回复生成器 - Madoka鸠隐专用"""
     
     def __init__(self):
         self.client = None
         self.api_ready = False
         self._init_client()
         
-        # 系统提示 - 根据最新配置文件更新
+        # 系统提示 - 针对Madoka鸠隐定制
         self.system_prompt = f"""你是【{RESTAURANT_CONFIG['name']}】的抖音小助理，需要生成活泼温暖、专业贴心的回复。
 
 餐厅详细信息：
@@ -125,24 +55,21 @@ class OpenAIStreamReplyGenerator:
 招牌特色：
 {', '.join(RESTAURANT_CONFIG['features'])}
 
-特惠套餐：
-{RESTAURANT_CONFIG.get('set meal', '')}
-
 回复要求：
 1. 语气活泼可爱，用"宝子""亲"等亲切称呼
 2. 回复简洁有温度，带emoji，不超过80字
-3. 体现餐厅的氛围感和专业性
-4. 适当提及特色菜品、套餐等亮点
+3. 体现日式居酒屋的氛围感和专业性
+4. 适当提及创意料理、鸡尾酒等特色
 5. 根据问题类型给出精准回答：
    - 预约：询问人数时间，提醒热门时段需提前
-   - 价格：提及人均消费和性价比，推荐套餐
+   - 价格：提及人均消费和性价比
    - 地址：准确提供地址和交通信息
-   - 推荐：重点推荐招牌特色和套餐优惠
-   - 营业时间：{RESTAURANT_CONFIG['business_hours']}，{RESTAURANT_CONFIG['status']}
-   - 风格：强调{RESTAURANT_CONFIG['style']}
+   - 推荐：重点推荐鹅肝寿司、创意鸡尾酒等特色
+   - 营业时间：11:00-00:00，当前营业中
+   - 风格：强调日式居酒屋与西式酒吧的融合
 
 示例：
-"宝子想订几人位呀？我们家的{RESTAURANT_CONFIG['features'][0]}超赞的~ 💕"
+"宝子想订几人位呀？我们家的鹅肝寿司配鸡尾酒超赞的~ 🍣🍸"
 
 请直接返回回复文本，不要包含JSON格式。"""
     
@@ -171,7 +98,7 @@ class OpenAIStreamReplyGenerator:
     async def generate_reply_stream(self, content: str) -> AsyncIterator[str]:
         """生成流式回复"""
         if not self.api_ready:
-            yield "稍等哦，小助理马上去通知店家确认~"
+            yield "稍等哦，小助理马上去通知店家确认"
             return
         
         try:
@@ -208,7 +135,7 @@ class OpenAIStreamReplyGenerator:
                             
         except Exception as e:
             logger.error(f"OpenAI流式生成失败: {e}")
-            yield "稍等哦，小助理马上去通知店家确认~ 🤗"
+            yield "稍等哦，小助理马上去通知店家确认"
     
     async def generate_reply(self, content: str) -> ReplyResult:
         """生成完整回复"""
@@ -229,7 +156,6 @@ class OpenAIStreamReplyGenerator:
         
         return ReplyResult(
             text=reply_text,
-            is_template=False,
             category=category,
             confidence=0.9,
             generation_time=generation_time
@@ -238,7 +164,7 @@ class OpenAIStreamReplyGenerator:
     def _clean_reply(self, text: str) -> str:
         """清理AI生成的回复"""
         if not text:
-            return "稍等哦，小助理马上去通知店家确认~ 🤗"
+            return "稍等哦，小助理马上去通知店家确认"
         
         # 移除多余空白
         text = re.sub(r'\s+', ' ', text).strip()
@@ -262,7 +188,7 @@ class OpenAIStreamReplyGenerator:
         
         if any(word in content_lower for word in ['预约', '订位', '定位', '订桌']):
             return "预约咨询"
-        elif any(word in content_lower for word in ['价格', '多少钱', '消费', '人均', '套餐']):
+        elif any(word in content_lower for word in ['价格', '多少钱', '消费', '人均']):
             return "价格咨询"
         elif any(word in content_lower for word in ['地址', '在哪', '位置', '怎么走']):
             return "地址咨询"
@@ -289,40 +215,25 @@ class OpenAIStreamReplyGenerator:
             await self.client.aclose()
 
 
-class SmartReplyGenerator:
-    """智能回复生成器（当前只使用AI，模板功能已注释）"""
+class MadokaReplyGenerator:
+    """Madoka鸠隐专用回复生成器"""
     
     def __init__(self):
-        # self.template_generator = TemplateReplyGenerator()  # 模板生成器已注释
         self.ai_generator = OpenAIStreamReplyGenerator()
-        
-        # 策略配置
-        # self.template_threshold = 0.7  # 模板回复阈值 - 已注释
-        self.ai_fallback = True  # AI回复兜底
         
         # 统计信息
         self.stats = {
             'total_requests': 0,
-            # 'template_replies': 0,  # 模板回复统计已注释
             'ai_replies': 0,
             'fallback_replies': 0,
             'avg_generation_time': 0.0
         }
     
     async def generate_reply(self, content: str) -> ReplyResult:
-        """智能生成回复（当前只使用AI）"""
+        """生成回复"""
         self.stats['total_requests'] += 1
         
         try:
-            # 模板回复功能已注释，直接使用AI生成
-            # # 1. 尝试模板回复
-            # category = self.template_generator.detect_category(content)
-            # 
-            # # 高置信度使用模板回复
-            # if category != "默认" and self._should_use_template(content, category):
-            #     self.stats['template_replies'] += 1
-            #     return self.template_generator.generate_template_reply(content, category)
-            
             # 使用AI生成回复
             if self.ai_generator.api_ready:
                 self.stats['ai_replies'] += 1
@@ -336,8 +247,7 @@ class SmartReplyGenerator:
             # 兜底回复
             self.stats['fallback_replies'] += 1
             return ReplyResult(
-                text="稍等哦，小助理马上去通知店家确认~ 🤗",
-                is_template=False,
+                text="稍等哦，小助理马上去通知店家确认",
                 category="系统兜底",
                 confidence=0.5
             )
@@ -346,53 +256,25 @@ class SmartReplyGenerator:
             logger.error(f"回复生成失败: {e}")
             self.stats['fallback_replies'] += 1
             return ReplyResult(
-                text="稍等哦，小助理马上去通知店家确认~ 🤗",
-                is_template=False,
+                text="稍等哦，小助理马上去通知店家确认",
                 category="错误兜底",
                 confidence=0.5
             )
     
     async def generate_reply_stream(self, content: str) -> AsyncIterator[str]:
-        """生成流式回复（当前只使用AI）"""
+        """生成流式回复"""
         try:
-            # 模板回复功能已注释，直接使用AI流式生成
-            # # 检查是否应该使用模板回复
-            # category = self.template_generator.detect_category(content)
-            # 
-            # if category != "默认" and self._should_use_template(content, category):
-            #     # 立即返回模板回复
-            #     template_result = self.template_generator.generate_template_reply(content, category)
-            #     yield template_result.text
-            #     return
-            
-            # 使用AI流式生成
+            # 直接使用AI流式生成
             if self.ai_generator.api_ready:
                 async for part in self.ai_generator.generate_reply_stream(content):
                     yield part
             else:
                 # 兜底回复
-                yield "稍等哦，小助理马上去通知店家确认~ 🤗"
+                yield "稍等哦，小助理马上去通知店家确认"
                 
         except Exception as e:
             logger.error(f"流式回复生成失败: {e}")
-            yield "稍等哦，小助理马上去通知店家确认~ 🤗"
-    
-    # def _should_use_template(self, content: str, category: str) -> bool:
-    #     """判断是否应该使用模板回复 - 已注释"""
-    #     # 简单问题优先使用模板
-    #     simple_patterns = [
-    #         r'^.{0,10}(价格|多少钱|费用)',  # 简短的价格询问
-    #         r'^.{0,10}(地址|在哪|位置)',   # 简短的地址询问
-    #         r'^.{0,10}(营业时间|几点)',    # 简短的时间询问
-    #         r'^.{0,8}(预约|订位)',        # 简短的预约
-    #     ]
-    #     
-    #     for pattern in simple_patterns:
-    #         if re.search(pattern, content):
-    #             return True
-    #     
-    #     # 对于复杂问题，使用AI生成
-    #     return len(content) < 15
+            yield "稍等哦，小助理马上去通知店家确认"
     
     def _update_avg_time(self, generation_time: float):
         """更新平均生成时间"""
@@ -404,12 +286,11 @@ class SmartReplyGenerator:
         else:
             self.stats['avg_generation_time'] = generation_time
     
-    def get_stats(self) -> Dict:
+    def get_stats(self) -> dict:
         """获取统计信息"""
         total = self.stats['total_requests']
         base_stats = {
             **self.stats,
-            # 'template_rate': self.stats['template_replies'] / total if total > 0 else 0,  # 已注释
             'ai_rate': self.stats['ai_replies'] / total if total > 0 else 0,
             'fallback_rate': self.stats['fallback_replies'] / total if total > 0 else 0
         }
@@ -424,9 +305,9 @@ class SmartReplyGenerator:
 
 
 # 创建全局实例
-def create_reply_generator() -> SmartReplyGenerator:
+def create_reply_generator() -> MadokaReplyGenerator:
     """创建回复生成器实例"""
-    return SmartReplyGenerator()
+    return MadokaReplyGenerator()
 
 
 if __name__ == "__main__":
@@ -440,11 +321,12 @@ if __name__ == "__main__":
             "你们地址在哪",
             "营业时间几点到几点",
             "推荐什么特色菜",
-            "有什么套餐优惠吗",
-            "你们这个餐厅怎么样，环境如何"
+            "有什么好的鸡尾酒推荐吗",
+            "鹅肝寿司怎么样",
+            "你们这个日式居酒屋怎么样，环境如何"
         ]
         
-        print(f"🍽️ 测试 {RESTAURANT_CONFIG['name']} AI回复系统")
+        print(f"🍣 测试 {RESTAURANT_CONFIG['name']} AI回复系统")
         
         for i, content in enumerate(test_cases, 1):
             print(f"\n--- 测试 {i} ---")
