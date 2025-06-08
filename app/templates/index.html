@@ -152,6 +152,10 @@
                                             <div class="text-gray-600">AI回复</div>
                                             <div class="text-lg font-bold text-orange-600" id="aiReplies">0</div>
                                         </div>
+                                        <div class="bg-indigo-50 p-2 rounded text-xs">
+                                            <div class="text-gray-600">AI处理率</div>
+                                            <div class="text-lg font-bold text-indigo-600" id="aiProcessRate">0%</div>
+                                        </div>
                                     </div>
                                 </div>
                                 <div>
@@ -399,10 +403,15 @@
         // 获取分析数据
         async function fetchAnalyticsData() {
             try {
-                const response = await fetch('/api/analytics');
-                const data = await response.json();
+                const [analyticsResponse, aiStatsResponse] = await Promise.all([
+                    fetch('/api/analytics'),
+                    fetch('/api/ai_stats')
+                ]);
                 
-                updateAnalyticsDisplay(data);
+                const analyticsData = await analyticsResponse.json();
+                const aiStatsData = await aiStatsResponse.json();
+                
+                updateAnalyticsDisplay(analyticsData, aiStatsData);
                 
                 // 显示分析数据，隐藏占位符
                 document.getElementById('statsPlaceholder').classList.add('hidden');
@@ -414,7 +423,7 @@
         }
 
         // 更新分析数据显示
-        function updateAnalyticsDisplay(data) {
+        function updateAnalyticsDisplay(data, aiStats) {
             const realtime = data.realtime || {};
             
             // 更新实时统计
@@ -422,6 +431,14 @@
             document.getElementById('messages1hour').textContent = realtime.messages_1hour || 0;
             document.getElementById('activeUsers').textContent = realtime.active_users_1hour || 0;
             document.getElementById('aiReplies').textContent = realtime.ai_responses_1hour || 0;
+            
+            // 更新AI处理率
+            if (aiStats && aiStats.total_processed > 0) {
+                const processRate = Math.round(((aiStats.total_processed - aiStats.ignored_count) / aiStats.total_processed) * 100);
+                document.getElementById('aiProcessRate').textContent = processRate + '%';
+            } else {
+                document.getElementById('aiProcessRate').textContent = '0%';
+            }
             
             // 更新消息类型图表
             const messageTypes = realtime.message_types || {};

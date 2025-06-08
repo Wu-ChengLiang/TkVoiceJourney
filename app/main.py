@@ -116,61 +116,48 @@ tts_client: Optional[TTSClient] = None
 barrage_buffer: List[Dict] = []
 last_ai_check_time = time.time()
 
-# 弹幕数据缓冲区处理
-async def process_barrage_buffer():
-    """每8秒处理一次弹幕缓冲区"""
-    global barrage_buffer, last_ai_check_time
+# 智能弹幕处理系统
+async def process_barrage_intelligently():
+    """智能弹幕处理 - 事件驱动模式"""
+    global barrage_buffer
     
     while True:
-        await asyncio.sleep(8)  # 8秒间隔
+        await asyncio.sleep(1)  # 1秒检查一次
         
         if not barrage_buffer:
             continue
             
         current_time = time.time()
         
-        # 获取最近8秒的弹幕
-        recent_barrages = [
-            barrage for barrage in barrage_buffer 
-            if current_time - barrage.get('timestamp', 0) <= 8
-        ]
+        # 处理新弹幕
+        new_barrages = []
+        for barrage in barrage_buffer:
+            if not barrage.get('processed', False):
+                new_barrages.append(barrage)
+                barrage['processed'] = True
         
-        if not recent_barrages:
+        if not new_barrages:
             continue
             
-        logger.info(f"处理 {len(recent_barrages)} 条弹幕")
+        # 使用优化版AI判断器处理弹幕
+        if ai_judge and hasattr(ai_judge, 'process_barrage_stream'):
+            for barrage in new_barrages:
+                try:
+                    reply_text = await ai_judge.process_barrage_stream(barrage)
+                    if reply_text:
+                        await _handle_ai_reply(reply_text, [barrage], current_time)
+                        
+                except Exception as e:
+                    logger.error(f"智能处理弹幕失败: {e}")
         
-        # AI判断弹幕价值
-        if ai_judge:
+        # 兼容旧版AI判断器
+        elif ai_judge:
             try:
-                ai_result = await ai_judge.judge_barrages(recent_barrages)
+                ai_result = await ai_judge.judge_barrages(new_barrages)
                 if ai_result and ai_result.get('has_value'):
-                    # 生成商家回复
                     reply_text = await ai_judge.generate_reply(ai_result.get('content', ''))
                     if reply_text:
-                        # TTS语音合成
-                        if tts_client:
-                            audio_path = await tts_client.text_to_speech(reply_text)
-                            if audio_path:
-                                # 广播AI回复和音频
-                                await manager.broadcast({
-                                    'type': 'ai_reply',
-                                    'text': reply_text,
-                                    'audio_path': audio_path,
-                                    'timestamp': current_time
-                                })
-                                
-                                # 保存AI回复记录
-                                ai_response_data = {
-                                    'text': reply_text,
-                                    'audio_path': audio_path,
-                                    'timestamp': current_time,
-                                    'source_barrages': recent_barrages
-                                }
-                                manager.ai_responses.append(ai_response_data)
-                                
-                                # 添加到数据分析
-                                analytics.add_ai_response(ai_response_data)
+                        await _handle_ai_reply(reply_text, new_barrages, current_time)
                         
             except Exception as e:
                 logger.error(f"AI处理失败: {e}")
@@ -178,8 +165,42 @@ async def process_barrage_buffer():
         # 清理过期的弹幕缓冲区
         barrage_buffer = [
             barrage for barrage in barrage_buffer 
-            if current_time - barrage.get('timestamp', 0) <= 30  # 保留最近30秒
+            if current_time - barrage.get('timestamp', 0) <= 60  # 保留最近60秒
         ]
+
+async def _handle_ai_reply(reply_text: str, source_barrages: List[Dict], timestamp: float):
+    """处理AI回复"""
+    try:
+        # TTS语音合成
+        audio_path = None
+        if tts_client:
+            audio_path = await tts_client.text_to_speech(reply_text)
+        
+        # 广播AI回复
+        await manager.broadcast({
+            'type': 'ai_reply',
+            'text': reply_text,
+            'audio_path': audio_path,
+            'timestamp': timestamp,
+            'source_content': source_barrages[0].get('content', '') if source_barrages else ''
+        })
+        
+        # 保存AI回复记录
+        ai_response_data = {
+            'text': reply_text,
+            'audio_path': audio_path,
+            'timestamp': timestamp,
+            'source_barrages': source_barrages
+        }
+        manager.ai_responses.append(ai_response_data)
+        
+        # 添加到数据分析
+        analytics.add_ai_response(ai_response_data)
+        
+        logger.info(f"✅ AI回复已生成: {reply_text}")
+        
+    except Exception as e:
+        logger.error(f"处理AI回复失败: {e}")
 
 # 路由定义
 @app.get("/", response_class=HTMLResponse)
@@ -302,6 +323,25 @@ async def get_realtime_analytics():
         logger.error(f"获取实时分析数据失败: {e}")
         return {"error": str(e)}
 
+@app.get("/api/ai_stats")
+async def get_ai_stats():
+    """获取AI判断器统计信息"""
+    try:
+        if ai_judge and hasattr(ai_judge, 'get_stats'):
+            return ai_judge.get_stats()
+        else:
+            return {
+                "total_processed": 0,
+                "ignored_count": 0,
+                "ai_calls": 0,
+                "cache_hits": 0,
+                "batch_processed": 0,
+                "message": "使用简化版AI判断器"
+            }
+    except Exception as e:
+        logger.error(f"获取AI统计信息失败: {e}")
+        return {"error": str(e)}
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """WebSocket端点"""
@@ -396,9 +436,9 @@ async def startup_event():
     except Exception as e:
         logger.error(f"❌ TTS客户端初始化失败: {e}")
     
-    # 启动弹幕缓冲区处理
-    asyncio.create_task(process_barrage_buffer())
-    logger.info("✅ 弹幕处理任务已启动")
+    # 启动智能弹幕处理
+    asyncio.create_task(process_barrage_intelligently())
+    logger.info("✅ 智能弹幕处理任务已启动")
 
 # 应用关闭事件
 @app.on_event("shutdown")
