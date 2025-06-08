@@ -77,12 +77,10 @@ class ConnectionManager:
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
         self.active_connections.append(websocket)
-        logger.info(f"WebSocket连接已建立，当前连接数: {len(self.active_connections)}")
         
     def disconnect(self, websocket: WebSocket):
         if websocket in self.active_connections:
             self.active_connections.remove(websocket)
-        logger.info(f"WebSocket连接已断开，当前连接数: {len(self.active_connections)}")
         
     async def broadcast(self, data: dict):
         """广播消息到所有连接的客户端"""
@@ -145,13 +143,13 @@ async def process_barrage_intelligently():
             for barrage in new_barrages:
                 try:
                     # 调试：打印弹幕数据结构
-                    logger.debug(f"🔍 处理弹幕数据: {barrage}")
+                    # logger.debug(f"🔍 处理弹幕数据: {barrage}")
                     
                     # 直接使用process_barrage_stream处理弹幕（已包含筛选+回复生成）
                     reply_text = await ai_judge.process_barrage_stream(barrage)
                     
                     if reply_text:
-                        logger.info(f"🎯 筛选出有价值弹幕，生成回复: {reply_text}")
+                        # logger.info(f"🎯 筛选出有价值弹幕，生成回复: {reply_text}")
                         # 调用Fish Audio生成语音
                         await _handle_openai_fish_reply(reply_text, [barrage], current_time)
                         # 限制频率，避免过于频繁回复
@@ -188,14 +186,14 @@ async def process_barrage_intelligently():
 async def _handle_openai_fish_reply(reply_text: str, source_barrages: List[Dict], timestamp: float):
     """处理OpenAI+Fish Audio流式语音回复"""
     try:
-        logger.info(f"🤖 OpenAI生成回复: {reply_text}")
+        # logger.info(f"🤖 OpenAI生成回复: {reply_text}")
         
         # 使用Fish Audio WebSocket TTS生成语音（流式）
         audio_path = None
         if tts_client:
             audio_path = await tts_client.text_to_speech(reply_text)
-            if audio_path:
-                logger.info(f"🎵 Fish Audio语音已生成: {audio_path}")
+            # if audio_path:
+                # logger.info(f"🎵 Fish Audio语音已生成: {audio_path}")
         
         # 广播AI回复
         await manager.broadcast({
@@ -220,7 +218,7 @@ async def _handle_openai_fish_reply(reply_text: str, source_barrages: List[Dict]
         # 添加到数据分析
         analytics.add_ai_response(ai_response_data)
         
-        logger.info(f"✅ OpenAI+Fish Audio流式回复完成: {reply_text}")
+        # logger.info(f"✅ OpenAI+Fish Audio流式回复完成: {reply_text}")
         
     except Exception as e:
         logger.error(f"处理OpenAI+Fish Audio回复失败: {e}")
@@ -314,7 +312,7 @@ async def manual_reply(request: ManualReplyRequest):
                     'is_ai_generated': request.text.strip().startswith("@ai") or not request.text.strip()
                 })
                 
-                logger.info(f"✅ 手动回复已发送: {reply_text}")
+                # logger.info(f"✅ 手动回复已发送: {reply_text}")
                 return {"status": "success", "message": "手动回复已发送", "reply_text": reply_text}
         
         return {"status": "error", "message": "语音生成失败"}
@@ -394,7 +392,7 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             # 接收客户端消息
             data = await websocket.receive_json()
-            logger.info(f"收到WebSocket消息: {data}")
+            # logger.info(f"收到WebSocket消息: {data}")
             
             # 处理不同类型的消息
             if data.get('type') == 'ping':
@@ -460,7 +458,7 @@ async def startup_event():
     # 加载环境变量
     load_dotenv()
     
-    logger.info("🚀 启动抖音直播弹幕语音客服系统")
+    # logger.info("🚀 启动抖音直播弹幕语音客服系统")
     
     # 创建必要目录
     (Path(__file__).parent / "data").mkdir(exist_ok=True)
@@ -469,20 +467,20 @@ async def startup_event():
     # 初始化AI判断系统
     try:
         ai_judge = create_ai_judge()
-        logger.info("✅ AI判断系统初始化成功")
+        # logger.info("✅ AI判断系统初始化成功")
     except Exception as e:
         logger.error(f"❌ AI判断系统初始化失败: {e}")
     
     # 初始化TTS客户端
     try:
         tts_client = create_tts_client()
-        logger.info("✅ TTS客户端初始化成功")
+        # logger.info("✅ TTS客户端初始化成功")
     except Exception as e:
         logger.error(f"❌ TTS客户端初始化失败: {e}")
     
     # 启动智能弹幕处理（OpenAI+Fish Audio流式语音回复）
     asyncio.create_task(process_barrage_intelligently())
-    logger.info("✅ 智能弹幕处理任务已启动（OpenAI+Fish Audio流式语音回复）")
+    # logger.info("✅ 智能弹幕处理任务已启动（OpenAI+Fish Audio流式语音回复）")
 
 # 应用关闭事件
 @app.on_event("shutdown")
@@ -490,7 +488,7 @@ async def shutdown_event():
     """应用关闭时清理"""
     global barrage_fetcher
     
-    logger.info("🛑 关闭抖音直播弹幕语音客服系统")
+    # logger.info("🛑 关闭抖音直播弹幕语音客服系统")
     
     if barrage_fetcher:
         await barrage_fetcher.stop()
