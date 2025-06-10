@@ -1,0 +1,73 @@
+import gradio_client
+from gradio_client.utils import handle_file
+import soundfile as sf
+import numpy as np
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# 1. 连接到Gradio客户端
+client = gradio_client.Client(os.getenv("auto_api_url"))
+
+# 2. 准备参考音频文件
+sample_rate = 22050  # 使用更常见的采样率
+duration = 2.0  # 2秒
+t = np.linspace(0, duration, int(sample_rate * duration))
+# 创建一个简单的音调，而不是纯正弦波
+audio_data = np.sin(2 * np.pi * 220 * t) * 0.3  # 220Hz，稍大音量
+sf.write("ref.wav", audio_data, sample_rate)
+
+print(f"创建参考音频文件: ref.wav (大小: {os.path.getsize('ref.wav')} bytes)")
+
+# 3. 正确的API调用 - 使用handle_file()包装音频文件
+try:
+    print("开始调用API...")
+    result = client.predict(
+        "你好，这是一个测试。",                      # text: 要合成的文本
+        False,                                      # normalize: 是否标准化
+        "",                                         # reference_id: 参考ID
+        handle_file("ref.wav"),                     # reference_audio: 使用handle_file()包装
+        "",                                         # reference_text: 参考文本
+        0,                                          # max_new_tokens
+        200,                                        # chunk_length
+        0.7,                                        # top_p
+        1.2,                                        # repetition_penalty
+        0.7,                                        # temperature
+        42,                                         # seed
+        "on",                                       # use_memory_cache
+        api_name="/partial"
+    )
+    
+    print(f"API调用成功!")
+    print(f"返回结果: {result}")
+    if result and len(result) > 0 and result[0]:
+        generated_audio_path = result[0]
+        print(f"生成的音频文件: {generated_audio_path}")
+        
+        # 复制生成的音频到当前目录
+        import shutil
+        if os.path.exists(generated_audio_path):
+            shutil.copy2(generated_audio_path, "generated_audio.wav")
+            print("音频文件已复制到: generated_audio.wav")
+        
+except Exception as e:
+    print(f"API调用失败: {e}")
+    print("可能的原因：")
+    print("1. 参考音频格式不正确")
+    print("2. Gradio服务暂时不可用")
+    print("3. 参数格式不匹配")
+    
+    # # 尝试更简单的调用
+    # print("\n尝试更简单的参数...")
+    # try:
+    #     result2 = client.predict(
+    #         "测试",                    # text
+    #         False,                     # normalize
+    #         "",                        # reference_id
+    #         handle_file("ref.wav"),     # reference_audio: 使用handle_file()包装
+    #         api_name="/partial"
+    #     )
+    #     print(f"简化调用成功: {result2}")
+    # except Exception as e2:
+    #     print(f"简化调用也失败: {e2}")

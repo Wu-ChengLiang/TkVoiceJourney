@@ -1,0 +1,1 @@
+ if (-not $env:VIRTUAL_ENV -or $env:VIRTUAL_ENV -ne "F:\feat\TkVoiceJourney\tkvj") { $env:VIRTUAL_ENV = "F:\feat\TkVoiceJourney\tkvj"; . "$env:VIRTUAL_ENV\Scripts\Activate.ps1" }
