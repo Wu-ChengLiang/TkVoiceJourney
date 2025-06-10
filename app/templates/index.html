@@ -87,6 +87,18 @@
                 <h1 class="text-xl font-bold text-dark">抖音直播弹幕语音客服</h1>
             </div>
             <div class="flex items-center space-x-4">
+                <!-- 连接状态指示器 -->
+                <div class="flex items-center space-x-3 text-xs">
+                    <div class="flex items-center space-x-1">
+                        <div class="w-2 h-2 rounded-full" id="wsStatusDot"></div>
+                        <span id="wsStatusText">未连接</span>
+                    </div>
+                    <div class="flex items-center space-x-1">
+                        <i class="fa fa-microphone"></i>
+                        <span id="ttsStatusText">检查中</span>
+                    </div>
+                </div>
+                
                 <div class="flex items-center space-x-2">
                     <span class="text-sm text-gray-500">直播间ID:</span>
                     <input 
@@ -238,11 +250,7 @@
                     </button>
                 </div>
                 
-                <div class="flex justify-between items-center text-sm text-gray-500">
-                    <div>
-                        <i class="fa fa-microphone mr-1"></i>
-                        <span>语音合成: <span class="text-green-500" id="ttsStatus">已连接</span></span>
-                    </div>
+                <div class="flex justify-center items-center text-sm text-gray-500">
                     <div>
                         <i class="fa fa-cog mr-1"></i>
                         <a href="#" class="hover:text-secondary transition-colors duration-300">设置</a>
@@ -276,6 +284,132 @@
         };
         // 添加AI回复去重缓存
         let displayedAIResponses = new Set();
+        
+        // 状态持久化管理
+        const StateManager = {
+            // 保存状态到localStorage
+            saveState() {
+                const state = {
+                    isMonitoring: isMonitoring,
+                    liveId: document.getElementById('liveIdInput').value,
+                    barrageCount: barrageCount,
+                    aiResponseCount: aiResponseCount,
+                    barrageStats: barrageStats,
+                    timestamp: Date.now()
+                };
+                localStorage.setItem('voiceJourneyState', JSON.stringify(state));
+            },
+            
+            // 从localStorage恢复状态
+            restoreState() {
+                try {
+                    const savedState = localStorage.getItem('voiceJourneyState');
+                    if (!savedState) return false;
+                    
+                    const state = JSON.parse(savedState);
+                    
+                    // 检查状态是否过期（超过24小时）
+                    if (Date.now() - state.timestamp > 24 * 60 * 60 * 1000) {
+                        localStorage.removeItem('voiceJourneyState');
+                        return false;
+                    }
+                    
+                    // 恢复状态
+                    isMonitoring = state.isMonitoring || false;
+                    barrageCount = state.barrageCount || 0;
+                    aiResponseCount = state.aiResponseCount || 0;
+                    barrageStats = state.barrageStats || {types: {}, users: {}, totalInteractions: 0};
+                    
+                    // 恢复UI状态
+                    if (state.liveId) {
+                        document.getElementById('liveIdInput').value = state.liveId;
+                    }
+                    
+                    if (isMonitoring) {
+                        updateToggleButtonState(true);
+                    }
+                    
+                    // 更新计数显示
+                    document.getElementById('barrageCount').textContent = `${barrageCount} 条弹幕`;
+                    
+                    console.log('状态已恢复:', state);
+                    return true;
+                } catch (error) {
+                    console.error('恢复状态失败:', error);
+                    localStorage.removeItem('voiceJourneyState');
+                    return false;
+                }
+            },
+            
+            // 清除保存的状态
+            clearState() {
+                localStorage.removeItem('voiceJourneyState');
+            }
+        };
+        
+        // 连接状态管理
+        const ConnectionStatus = {
+            // 更新WebSocket连接状态
+            updateWSStatus(connected) {
+                const dot = document.getElementById('wsStatusDot');
+                const text = document.getElementById('wsStatusText');
+                
+                if (connected) {
+                    dot.className = 'w-2 h-2 rounded-full bg-green-500';
+                    text.textContent = 'WebSocket已连接';
+                    text.className = 'text-green-600';
+                } else {
+                    dot.className = 'w-2 h-2 rounded-full bg-red-500';
+                    text.textContent = 'WebSocket断开';
+                    text.className = 'text-red-600';
+                }
+            },
+            
+            // 更新TTS服务状态
+            updateTTSStatus(status, message) {
+                const text = document.getElementById('ttsStatusText');
+                
+                switch(status) {
+                    case 'connected':
+                        text.textContent = 'TTS已连接';
+                        text.className = 'text-green-600';
+                        break;
+                    case 'disconnected':
+                        text.textContent = 'TTS未连接';
+                        text.className = 'text-red-600';
+                        break;
+                    case 'checking':
+                        text.textContent = 'TTS检查中';
+                        text.className = 'text-yellow-600';
+                        break;
+                    case 'error':
+                        text.textContent = 'TTS错误';
+                        text.className = 'text-red-600';
+                        break;
+                }
+                
+                if (message) {
+                    text.title = message;
+                }
+            }
+        };
+        
+        // 更新按钮状态的辅助函数
+        function updateToggleButtonState(monitoring) {
+            const toggleBtn = document.getElementById('toggleBtn');
+            const toggleIcon = document.getElementById('toggleIcon');
+            const toggleText = document.getElementById('toggleText');
+            
+            if (monitoring) {
+                toggleIcon.className = 'fa fa-stop';
+                toggleText.textContent = '停止监控';
+                toggleBtn.className = 'bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded transition-all duration-300 flex items-center space-x-1';
+            } else {
+                toggleIcon.className = 'fa fa-play';
+                toggleText.textContent = '弹幕获取';
+                toggleBtn.className = 'bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded transition-all duration-300 flex items-center space-x-1';
+            }
+        }
 
         // WebSocket连接
         function connectWebSocket() {
@@ -286,6 +420,7 @@
             
             ws.onopen = function(event) {
                 console.log('WebSocket连接已建立');
+                ConnectionStatus.updateWSStatus(true);
             };
             
             ws.onmessage = function(event) {
@@ -295,6 +430,9 @@
             
             ws.onclose = function(event) {
                 console.log('WebSocket连接已断开');
+                ConnectionStatus.updateWSStatus(false);
+                
+                // 如果正在监控，3秒后自动重连
                 if (isMonitoring) {
                     setTimeout(connectWebSocket, 3000);
                 }
@@ -302,6 +440,7 @@
             
             ws.onerror = function(error) {
                 console.error('WebSocket错误:', error);
+                ConnectionStatus.updateWSStatus(false);
             };
         }
 
@@ -357,6 +496,9 @@
             while (container.children.length > 100) {
                 container.removeChild(container.firstChild);
             }
+            
+            // 保存状态
+            StateManager.saveState();
         }
 
         // 显示AI回复
@@ -417,6 +559,9 @@
             while (container.children.length > 50) {
                 container.removeChild(container.firstChild);
             }
+            
+            // 保存状态
+            StateManager.saveState();
         }
 
         // 获取类型颜色
@@ -545,8 +690,6 @@
         async function toggleLiveMonitoring() {
             const liveId = document.getElementById('liveIdInput').value.trim();
             const toggleBtn = document.getElementById('toggleBtn');
-            const toggleIcon = document.getElementById('toggleIcon');
-            const toggleText = document.getElementById('toggleText');
             
             if (!liveId) {
                 alert('请输入直播间ID');
@@ -567,9 +710,7 @@
                     
                     if (response.ok) {
                         isMonitoring = true;
-                        toggleIcon.className = 'fa fa-stop';
-                        toggleText.textContent = '停止监控';
-                        toggleBtn.className = 'bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded transition-all duration-300 flex items-center space-x-1';
+                        updateToggleButtonState(true);
                         
                         // 先关闭现有连接再建立新连接
                         if (ws) {
@@ -577,6 +718,12 @@
                             ws = null;
                         }
                         connectWebSocket();
+                        
+                        // 保存状态
+                        StateManager.saveState();
+                        
+                        // 检查TTS状态
+                        checkTTSStatus();
                     } else {
                         const error = await response.json();
                         alert('启动失败: ' + error.detail);
@@ -588,14 +735,17 @@
                     
                     if (response.ok) {
                         isMonitoring = false;
-                        toggleIcon.className = 'fa fa-play';
-                        toggleText.textContent = '弹幕获取';
-                        toggleBtn.className = 'bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded transition-all duration-300 flex items-center space-x-1';
+                        updateToggleButtonState(false);
                         
                         if (ws) {
                             ws.close();
                             ws = null;
                         }
+                        
+                        ConnectionStatus.updateWSStatus(false);
+                        
+                        // 保存状态
+                        StateManager.saveState();
                     }
                 }
             } catch (error) {
@@ -603,6 +753,148 @@
                 alert('操作失败，请检查网络连接');
             } finally {
                 toggleBtn.disabled = false;
+            }
+        }
+
+        // 检查TTS服务状态
+        async function checkTTSStatus() {
+            ConnectionStatus.updateTTSStatus('checking', '正在检查TTS服务状态...');
+            
+            try {
+                const response = await fetch('/api/tts_status');
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    switch(data.status) {
+                        case 'connected':
+                            ConnectionStatus.updateTTSStatus('connected', data.message);
+                            break;
+                        case 'disconnected':
+                            ConnectionStatus.updateTTSStatus('disconnected', data.message);
+                            break;
+                        case 'error':
+                            ConnectionStatus.updateTTSStatus('error', data.message);
+                            break;
+                        default:
+                            ConnectionStatus.updateTTSStatus('error', '未知TTS状态');
+                    }
+                } else {
+                    ConnectionStatus.updateTTSStatus('error', 'TTS状态检查API失败');
+                }
+            } catch (error) {
+                console.error('TTS状态检查失败:', error);
+                ConnectionStatus.updateTTSStatus('error', `TTS检查错误: ${error.message}`);
+            }
+        }
+
+        // 恢复历史数据
+        async function restoreHistoryData() {
+            try {
+                const response = await fetch('/api/barrage_data');
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // 临时禁用状态保存
+                    const originalSaveState = StateManager.saveState;
+                    StateManager.saveState = function() {}; // 临时禁用
+                    
+                    // 恢复弹幕数据（最近20条）
+                    const recentBarrages = data.barrages.slice(-20);
+                    for (const barrage of recentBarrages) {
+                        // 直接操作DOM，不触发状态保存
+                        const container = document.getElementById('barrageContainer');
+                        const waitingMsg = document.getElementById('waitingMsg');
+                        
+                        if (waitingMsg) {
+                            waitingMsg.remove();
+                        }
+                        
+                        const barrageItem = document.createElement('div');
+                        barrageItem.className = 'barrage-item mb-2 p-2 border-l-4 border-primary/30 bg-white rounded';
+                        
+                        const typeColor = getTypeColor(barrage.type);
+                        const timestamp = new Date(barrage.timestamp * 1000).toLocaleTimeString();
+                        
+                        barrageItem.innerHTML = `
+                            <div class="flex justify-between items-start mb-1">
+                                <span class="text-xs px-2 py-1 rounded ${typeColor} font-medium">
+                                    ${barrage.raw_type || barrage.type}
+                                </span>
+                                <span class="text-xs text-gray-400">${timestamp}</span>
+                            </div>
+                            <div class="font-medium text-sm text-gray-700">${barrage.user || ''}</div>
+                            <div class="text-gray-900">${barrage.content || ''}</div>
+                        `;
+                        
+                        container.appendChild(barrageItem);
+                        
+                        while (container.children.length > 100) {
+                            container.removeChild(container.firstChild);
+                        }
+                    }
+                    
+                    // 恢复AI回复数据（最近10条）
+                    const recentResponses = data.ai_responses.slice(-10);
+                    for (const response of recentResponses) {
+                        // 检查去重
+                        const responseId = `${response.timestamp}_${response.text.substring(0, 50)}`;
+                        if (displayedAIResponses.has(responseId)) {
+                            continue;
+                        }
+                        
+                        displayedAIResponses.add(responseId);
+                        
+                        const container = document.getElementById('aiResponseContainer');
+                        const waitingMsg = document.getElementById('aiWaitingMsg');
+                        
+                        if (waitingMsg) {
+                            waitingMsg.remove();
+                        }
+                        
+                        const responseItem = document.createElement('div');
+                        responseItem.className = 'ai-response mb-4 p-3 bg-blue-50 rounded-lg border-l-4 border-blue-400';
+                        
+                        const timestamp = new Date(response.timestamp * 1000).toLocaleTimeString();
+                        const isManual = response.type === 'manual_reply';
+                        
+                        responseItem.innerHTML = `
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="text-xs px-2 py-1 rounded ${isManual ? 'bg-green-200 text-green-800' : 'bg-blue-200 text-blue-800'}">
+                                    ${isManual ? '手动回复' : 'AI回复'}
+                                </span>
+                                <span class="text-xs text-gray-500">${timestamp}</span>
+                            </div>
+                            <div class="text-gray-900 font-medium">${response.text}</div>
+                            ${response.audio_path ? `
+                                <div class="mt-2">
+                                    <button onclick="playAudio('${response.audio_path}')" class="text-xs px-3 py-1 bg-green-100 text-green-800 rounded-full hover:bg-green-200 transition-colors">
+                                        <i class="fa fa-play mr-1"></i>播放语音
+                                    </button>
+                                </div>
+                            ` : ''}
+                        `;
+                        
+                        container.appendChild(responseItem);
+                        
+                        while (container.children.length > 50) {
+                            container.removeChild(container.firstChild);
+                        }
+                    }
+                    
+                    // 滚动到底部
+                    const barrageContainer = document.getElementById('barrageContainer');
+                    const aiContainer = document.getElementById('aiResponseContainer');
+                    barrageContainer.scrollTop = barrageContainer.scrollHeight;
+                    aiContainer.scrollTop = aiContainer.scrollHeight;
+                    
+                    // 恢复状态保存功能
+                    StateManager.saveState = originalSaveState;
+                    
+                    console.log('历史数据已恢复');
+                }
+            } catch (error) {
+                console.error('恢复历史数据失败:', error);
             }
         }
 
@@ -643,11 +935,34 @@
         }
 
         // 页面加载完成后初始化
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', async function() {
             console.log('抖音直播弹幕语音客服系统已加载');
-            // 不在页面加载时自动连接WebSocket，等待用户点击开始按钮
-            // connectWebSocket();
             
+            // 初始化连接状态显示
+            ConnectionStatus.updateWSStatus(false);
+            ConnectionStatus.updateTTSStatus('checking');
+            
+            // 恢复保存的状态
+            const stateRestored = StateManager.restoreState();
+            
+            // 检查TTS状态
+            await checkTTSStatus();
+            
+            // 如果之前正在监控，自动重新连接
+            if (stateRestored && isMonitoring) {
+                console.log('检测到之前正在监控，尝试自动重连...');
+                connectWebSocket();
+                
+                // 恢复历史数据
+                await restoreHistoryData();
+            }
+            
+            // 保存输入框变化
+            document.getElementById('liveIdInput').addEventListener('input', function() {
+                StateManager.saveState();
+            });
+            
+            // WebSocket心跳
             setInterval(() => {
                 if (ws && ws.readyState === WebSocket.OPEN) {
                     ws.send(JSON.stringify({ type: 'ping' }));
@@ -660,6 +975,13 @@
                     fetchAnalyticsData();
                 }
             }, 30000);
+            
+            // 定时检查TTS状态（每5分钟）
+            setInterval(() => {
+                if (isMonitoring) {
+                    checkTTSStatus();
+                }
+            }, 5 * 60 * 1000);
         });
     </script>
 </body>

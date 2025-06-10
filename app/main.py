@@ -384,6 +384,68 @@ async def get_ai_stats():
         logger.error(f"获取AI统计信息失败: {e}")
         return {"error": str(e)}
 
+@app.get("/api/tts_status")
+async def get_tts_status():
+    """获取TTS服务状态"""
+    try:
+        if not tts_client:
+            return {
+                "status": "disconnected",
+                "message": "TTS客户端未初始化",
+                "type": "none"
+            }
+        
+        # 检查TTS客户端类型
+        tts_type = type(tts_client).__name__
+        
+        if tts_type == "SimpleTTSClient":
+            return {
+                "status": "disconnected", 
+                "message": "使用简化版TTS客户端（无语音输出）",
+                "type": "simple"
+            }
+        
+        # 尝试简单的TTS测试
+        try:
+            # 检查Fish Audio配置
+            from config import FISH_AUDIO_CONFIG
+            if not FISH_AUDIO_CONFIG.get("api_key") or not FISH_AUDIO_CONFIG.get("voice_id"):
+                return {
+                    "status": "disconnected",
+                    "message": "Fish Audio API配置不完整",
+                    "type": "config_error"
+                }
+            
+            # 如果有WebSocket TTS客户端，检查其连接状态
+            if hasattr(tts_client, 'fish_tts'):
+                return {
+                    "status": "connected",
+                    "message": "Fish Audio TTS服务可用",
+                    "type": "fish_audio"
+                }
+            else:
+                return {
+                    "status": "connected",
+                    "message": "TTS客户端已就绪",
+                    "type": "streaming"
+                }
+                
+        except Exception as test_error:
+            logger.error(f"TTS测试失败: {test_error}")
+            return {
+                "status": "error",
+                "message": f"TTS测试失败: {str(test_error)}",
+                "type": "error"
+            }
+            
+    except Exception as e:
+        logger.error(f"获取TTS状态失败: {e}")
+        return {
+            "status": "error", 
+            "message": f"状态检查失败: {str(e)}",
+            "type": "error"
+        }
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """WebSocket端点"""
