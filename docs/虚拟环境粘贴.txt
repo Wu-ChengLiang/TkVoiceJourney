@@ -9,3 +9,8 @@ if (-not $env:VIRTUAL_ENV -or $env:VIRTUAL_ENV -ne "F:\feat\TkVoiceJourney\tkvj"
 
 $env:VIRTUAL_ENV = "F:\feat\zd\zd"  
 . "$env:VIRTUAL_ENV\Scripts\Activate.ps1"
+
+
+运行
+python run_gui.py
+
