@@ -275,10 +275,10 @@ class FishAudioHTTPTTS:
         try:
             import httpx
             
-            # 准备请求数据
+            # 准备请求数据 - HTTP使用mp3格式
             request_data = {
                 "text": text,
-                "format": FISH_AUDIO_CONFIG["format"],
+                "format": FISH_AUDIO_CONFIG["http_format"],  # HTTP使用mp3格式
                 "reference_id": self.voice_id,
                 "latency": FISH_AUDIO_CONFIG["latency"]
             }
@@ -297,10 +297,10 @@ class FishAudioHTTPTTS:
                     audio_data = response.content
                     
                     if save_file:
-                        # 保存为文件
+                        # 保存为文件 - 使用HTTP格式
                         text_hash = hashlib.md5(text.encode()).hexdigest()[:8]
                         timestamp = int(time.time())
-                        filename = f"tts_{timestamp}_{text_hash}.{FISH_AUDIO_CONFIG['format']}"
+                        filename = f"tts_{timestamp}_{text_hash}.{FISH_AUDIO_CONFIG['http_format']}"
                         output_path = self.output_dir / filename
                         
                         with open(output_path, 'wb') as f:

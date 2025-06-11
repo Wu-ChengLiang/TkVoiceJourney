@@ -285,6 +285,126 @@
         // 添加AI回复去重缓存
         let displayedAIResponses = new Set();
         
+        // 音频播放管理
+        let audioContext = null;
+        let audioPermissionGranted = false;
+        let pendingAudioQueue = [];
+        
+        // 初始化音频上下文（需要用户交互）
+        async function initAudioContext() {
+            if (!audioContext) {
+                try {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    if (audioContext.state === 'suspended') {
+                        await audioContext.resume();
+                    }
+                    audioPermissionGranted = true;
+                    console.log('✅ 音频上下文初始化成功');
+                    
+                    // 播放待播放队列中的音频
+                    while (pendingAudioQueue.length > 0) {
+                        const audioPath = pendingAudioQueue.shift();
+                        playAudio(audioPath);
+                    }
+                    
+                } catch (error) {
+                    console.error('❌ 音频上下文初始化失败:', error);
+                }
+            }
+        }
+        
+        // 播放音频
+        function playAudio(audioPath) {
+            console.log('播放音频:', audioPath);
+            
+            // 检查音频路径是否有效
+            if (!audioPath) {
+                console.warn('音频路径为空');
+                return;
+            }
+            
+            // 检查音频权限
+            if (!audioPermissionGranted) {
+                console.warn('音频权限未授予，添加到待播放队列');
+                pendingAudioQueue.push(audioPath);
+                
+                // 显示用户提示
+                showAudioPermissionPrompt();
+                return;
+            }
+            
+            const audioPlayer = document.getElementById('audioPlayer');
+            
+            // 设置音频源
+            audioPlayer.src = audioPath;
+            
+            // 播放音频并处理错误
+            const playPromise = audioPlayer.play();
+            
+            if (playPromise !== undefined) {
+                playPromise.then(() => {
+                    console.log('✅ 音频开始播放');
+                }).catch(error => {
+                    console.error('❌ 音频播放失败:', error);
+                    
+                    // 显示用户友好的错误提示
+                    if (error.name === 'NotAllowedError') {
+                        console.warn('浏览器阻止了音频播放，需要用户交互');
+                        showAudioPermissionPrompt();
+                    } else if (error.name === 'NotSupportedError') {
+                        console.warn('音频格式不支持');
+                        // 可以尝试转换格式或提示用户
+                    } else {
+                        console.warn('音频播放未知错误:', error.message);
+                    }
+                });
+            }
+            
+            // 监听音频加载状态
+            audioPlayer.addEventListener('loadstart', () => {
+                console.log('开始加载音频');
+            }, { once: true });
+            
+            audioPlayer.addEventListener('canplay', () => {
+                console.log('音频可以播放');
+            }, { once: true });
+            
+            audioPlayer.addEventListener('error', (e) => {
+                console.error('音频加载错误:', e.target.error);
+            }, { once: true });
+        }
+        
+        // 显示音频权限提示
+        function showAudioPermissionPrompt() {
+            // 创建提示元素
+            let prompt = document.getElementById('audioPermissionPrompt');
+            if (!prompt) {
+                prompt = document.createElement('div');
+                prompt.id = 'audioPermissionPrompt';
+                prompt.className = 'fixed top-4 right-4 bg-blue-500 text-white p-4 rounded-lg shadow-lg z-50 cursor-pointer';
+                prompt.innerHTML = `
+                    <div class="flex items-center space-x-2">
+                        <i class="fa fa-volume-up"></i>
+                        <span>点击启用音频播放</span>
+                    </div>
+                `;
+                
+                prompt.onclick = async () => {
+                    await initAudioContext();
+                    prompt.remove();
+                };
+                
+                document.body.appendChild(prompt);
+                
+                // 5秒后自动隐藏
+                setTimeout(() => {
+                    if (prompt.parentNode) {
+                        prompt.remove();
+                    }
+                }, 5000);
+            }
+        }
+        
         // 状态持久化管理
         const StateManager = {
             // 保存状态到localStorage
@@ -686,54 +806,6 @@
             return typeNames[type] || type;
         }
 
-        // 播放音频
-        function playAudio(audioPath) {
-            const audioPlayer = document.getElementById('audioPlayer');
-            
-            console.log('播放音频:', audioPath);
-            
-            // 检查音频路径是否有效
-            if (!audioPath) {
-                console.warn('音频路径为空');
-                return;
-            }
-            
-            // 设置音频源
-            audioPlayer.src = audioPath;
-            
-            // 播放音频并处理错误
-            audioPlayer.play().then(() => {
-                console.log('音频开始播放');
-            }).catch(error => {
-                console.error('音频播放失败:', error);
-                
-                // 显示用户友好的错误提示
-                if (error.name === 'NotSupportedError') {
-                    console.warn('音频格式不支持，尝试用系统播放器');
-                    // 可以尝试打开新窗口播放
-                    window.open(audioPath, '_blank');
-                } else if (error.name === 'NotAllowedError') {
-                    console.warn('浏览器阻止了音频播放，需要用户交互');
-                    // 可以显示提示让用户点击播放
-                } else {
-                    console.warn('音频播放未知错误:', error.message);
-                }
-            });
-            
-            // 监听音频加载状态
-            audioPlayer.addEventListener('loadstart', () => {
-                console.log('开始加载音频');
-            }, { once: true });
-            
-            audioPlayer.addEventListener('canplay', () => {
-                console.log('音频可以播放');
-            }, { once: true });
-            
-            audioPlayer.addEventListener('error', (e) => {
-                console.error('音频加载错误:', e.target.error);
-            }, { once: true });
-        }
-
         // 切换直播监控
         async function toggleLiveMonitoring() {
             const liveId = document.getElementById('liveIdInput').value.trim();
@@ -742,6 +814,11 @@
             if (!liveId) {
                 alert('请输入直播间ID');
                 return;
+            }
+            
+            // 初始化音频权限（用户交互触发）
+            if (!audioPermissionGranted) {
+                await initAudioContext();
             }
             
             toggleBtn.disabled = true;
