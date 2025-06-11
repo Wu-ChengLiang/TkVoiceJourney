@@ -233,3 +233,5 @@ asr-label*
 # 虚拟环境
 /tkvj/
 
+# 部署文档
+DEPLOY.md

@@ -40,18 +40,26 @@ class FishAudioWebSocketTTS:
     async def connect(self) -> bool:
         """连接到Fish Audio WebSocket"""
         try:
-            # 修复WebSocket连接参数
+            # 修复WebSocket连接参数，增加超时设置
             self.websocket = await websockets.connect(
                 self.websocket_url,
                 additional_headers={
                     "Authorization": f"Bearer {self.api_key}",
                     "model": self.model
-                }
+                },
+                open_timeout=10,  # 连接超时10秒
+                close_timeout=5,  # 关闭超时5秒
+                ping_interval=20,  # 心跳间隔20秒
+                ping_timeout=10   # 心跳超时10秒
             )
             self.is_connected = True
             logger.info("🔗 Fish Audio WebSocket连接成功")
             return True
             
+        except asyncio.TimeoutError:
+            logger.error("❌ WebSocket连接超时")
+            self.is_connected = False
+            return False
         except Exception as e:
             logger.error(f"❌ WebSocket连接失败: {e}")
             self.is_connected = False
@@ -247,11 +255,77 @@ class FishAudioWebSocketTTS:
             logger.error(f"清理音频文件失败: {e}")
 
 
+class FishAudioHTTPTTS:
+    """Fish Audio HTTP API备用TTS客户端"""
+    
+    def __init__(self):
+        self.api_key = FISH_AUDIO_CONFIG["api_key"]
+        self.base_url = "https://api.fish.audio/v1"
+        self.voice_id = FISH_AUDIO_CONFIG["voice_id"]
+        self.output_dir = Path(__file__).parent / "static" / "audio"
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        
+        logger.info("✅ Fish Audio HTTP TTS备用客户端初始化成功")
+    
+    async def text_to_speech(self, text: str, save_file: bool = True) -> Optional[Union[str, bytes]]:
+        """使用HTTP API进行文本转语音"""
+        if not text.strip():
+            return None
+        
+        try:
+            import httpx
+            
+            # 准备请求数据
+            request_data = {
+                "text": text,
+                "format": FISH_AUDIO_CONFIG["format"],
+                "reference_id": self.voice_id,
+                "latency": FISH_AUDIO_CONFIG["latency"]
+            }
+            
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    f"{self.base_url}/tts",
+                    headers={
+                        "Authorization": f"Bearer {self.api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json=request_data
+                )
+                
+                if response.status_code == 200:
+                    audio_data = response.content
+                    
+                    if save_file:
+                        # 保存为文件
+                        text_hash = hashlib.md5(text.encode()).hexdigest()[:8]
+                        timestamp = int(time.time())
+                        filename = f"tts_{timestamp}_{text_hash}.{FISH_AUDIO_CONFIG['format']}"
+                        output_path = self.output_dir / filename
+                        
+                        with open(output_path, 'wb') as f:
+                            f.write(audio_data)
+                        
+                        relative_path = f"/static/audio/{filename}"
+                        logger.info(f"✅ HTTP TTS保存成功: {relative_path}")
+                        return relative_path
+                    else:
+                        return audio_data
+                else:
+                    logger.error(f"❌ HTTP TTS请求失败: {response.status_code}")
+                    return None
+                    
+        except Exception as e:
+            logger.error(f"❌ HTTP TTS转换失败: {e}")
+            return None
+
+
 class StreamingTTSClient:
     """流式TTS客户端（结合AI回复流和TTS流）"""
     
     def __init__(self):
         self.fish_tts = FishAudioWebSocketTTS()
+        self.http_backup = FishAudioHTTPTTS()
         self.current_session = None
         
     async def text_stream_to_audio_stream(self, text_stream: AsyncIterator[str]) -> AsyncIterator[bytes]:
@@ -307,8 +381,29 @@ class StreamingTTSClient:
         return sentences
     
     async def text_to_speech(self, text: str, save_file: bool = True) -> Optional[Union[str, bytes]]:
-        """兼容性方法"""
-        return await self.fish_tts.text_to_speech(text, save_file)
+        """委托给Fish Audio TTS，WebSocket优先，失败时使用HTTP备用"""
+        # 首先尝试WebSocket TTS
+        try:
+            result = await self.fish_tts.text_to_speech(text, save_file)
+            if result:
+                return result
+            else:
+                logger.warning("WebSocket TTS失败，尝试HTTP备用方案")
+        except Exception as e:
+            logger.warning(f"WebSocket TTS异常: {e}，尝试HTTP备用方案")
+        
+        # WebSocket失败时使用HTTP备用方案
+        try:
+            result = await self.http_backup.text_to_speech(text, save_file)
+            if result:
+                logger.info("HTTP备用TTS成功")
+                return result
+            else:
+                logger.error("HTTP备用TTS也失败了")
+        except Exception as e:
+            logger.error(f"HTTP备用TTS异常: {e}")
+        
+        return None
     
     async def close(self):
         """关闭连接"""

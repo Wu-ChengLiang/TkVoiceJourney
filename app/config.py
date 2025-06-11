@@ -26,7 +26,7 @@ FISH_AUDIO_CONFIG = {
     "websocket_url": "wss://api.fish.audio/v1/tts/live",
     "voice_id": "57eab548c7ed4ddc974c4c153cb015b2",  # 指定的声音ID
     "model": "speech-1.6",  # 使用最新模型
-    "format": "opus",  # 音频格式
+    "format": "mp3",  # 改为mp3格式，提高浏览器兼容性
     "latency": "normal",  # 延迟模式
     "temperature": 0.7,
     "top_p": 0.7,

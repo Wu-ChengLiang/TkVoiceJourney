@@ -503,6 +503,8 @@
 
         // 显示AI回复
         function displayAIResponse(response) {
+            console.log('收到AI回复:', response);
+            
             // 生成唯一标识符用于去重
             const responseId = `${response.timestamp}_${response.text.substring(0, 50)}`;
             
@@ -519,6 +521,13 @@
             if (displayedAIResponses.size > 100) {
                 const array = Array.from(displayedAIResponses);
                 displayedAIResponses = new Set(array.slice(-80)); // 保留最后80条
+            }
+            
+            // 检查音频路径
+            if (response.audio_path) {
+                console.log('AI回复包含音频路径:', response.audio_path);
+            } else {
+                console.log('AI回复没有音频路径');
             }
             
             const container = document.getElementById('aiResponseContainer');
@@ -680,10 +689,49 @@
         // 播放音频
         function playAudio(audioPath) {
             const audioPlayer = document.getElementById('audioPlayer');
+            
+            console.log('播放音频:', audioPath);
+            
+            // 检查音频路径是否有效
+            if (!audioPath) {
+                console.warn('音频路径为空');
+                return;
+            }
+            
+            // 设置音频源
             audioPlayer.src = audioPath;
-            audioPlayer.play().catch(error => {
+            
+            // 播放音频并处理错误
+            audioPlayer.play().then(() => {
+                console.log('音频开始播放');
+            }).catch(error => {
                 console.error('音频播放失败:', error);
+                
+                // 显示用户友好的错误提示
+                if (error.name === 'NotSupportedError') {
+                    console.warn('音频格式不支持，尝试用系统播放器');
+                    // 可以尝试打开新窗口播放
+                    window.open(audioPath, '_blank');
+                } else if (error.name === 'NotAllowedError') {
+                    console.warn('浏览器阻止了音频播放，需要用户交互');
+                    // 可以显示提示让用户点击播放
+                } else {
+                    console.warn('音频播放未知错误:', error.message);
+                }
             });
+            
+            // 监听音频加载状态
+            audioPlayer.addEventListener('loadstart', () => {
+                console.log('开始加载音频');
+            }, { once: true });
+            
+            audioPlayer.addEventListener('canplay', () => {
+                console.log('音频可以播放');
+            }, { once: true });
+            
+            audioPlayer.addEventListener('error', (e) => {
+                console.error('音频加载错误:', e.target.error);
+            }, { once: true });
         }
 
         // 切换直播监控
