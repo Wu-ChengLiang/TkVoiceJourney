@@ -40,10 +40,10 @@ class FishAudioWebSocketTTS:
     async def connect(self) -> bool:
         """连接到Fish Audio WebSocket"""
         try:
-            # 修复WebSocket连接参数，增加超时设置
+            # 使用最新版本websockets库的标准连接方式
             self.websocket = await websockets.connect(
                 self.websocket_url,
-                additional_headers={
+                extra_headers={
                     "Authorization": f"Bearer {self.api_key}",
                     "model": self.model
                 },
@@ -62,6 +62,7 @@ class FishAudioWebSocketTTS:
             return False
         except Exception as e:
             logger.error(f"❌ WebSocket连接失败: {e}")
+            logger.info("💡 提示：将自动使用HTTP备用方案")
             self.is_connected = False
             return False
     
@@ -381,27 +382,32 @@ class StreamingTTSClient:
         return sentences
     
     async def text_to_speech(self, text: str, save_file: bool = True) -> Optional[Union[str, bytes]]:
-        """委托给Fish Audio TTS，WebSocket优先，失败时使用HTTP备用"""
-        # 首先尝试WebSocket TTS
-        try:
-            result = await self.fish_tts.text_to_speech(text, save_file)
-            if result:
-                return result
-            else:
-                logger.warning("WebSocket TTS失败，尝试HTTP备用方案")
-        except Exception as e:
-            logger.warning(f"WebSocket TTS异常: {e}，尝试HTTP备用方案")
+        """委托给Fish Audio TTS，临时强制使用HTTP备用方案解决服务器兼容性问题"""
+        # 临时解决方案：直接使用HTTP备用方案，跳过WebSocket
+        # 这样确保生成mp3格式，提高浏览器兼容性
+        logger.info("使用HTTP备用方案生成MP3格式音频（服务器兼容性优化）")
         
-        # WebSocket失败时使用HTTP备用方案
         try:
             result = await self.http_backup.text_to_speech(text, save_file)
             if result:
                 logger.info("HTTP备用TTS成功")
                 return result
             else:
-                logger.error("HTTP备用TTS也失败了")
+                logger.error("HTTP备用TTS失败")
         except Exception as e:
             logger.error(f"HTTP备用TTS异常: {e}")
+        
+        # 如果HTTP方案也失败，再尝试WebSocket
+        try:
+            logger.warning("HTTP方案失败，尝试WebSocket方案")
+            result = await self.fish_tts.text_to_speech(text, save_file)
+            if result:
+                logger.info("WebSocket TTS成功（opus格式）")
+                return result
+            else:
+                logger.error("WebSocket TTS也失败了")
+        except Exception as e:
+            logger.error(f"WebSocket TTS异常: {e}")
         
         return None
     
